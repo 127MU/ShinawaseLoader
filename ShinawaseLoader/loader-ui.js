@@ -1,6 +1,6 @@
-// Loader UI generation 48. Keep this guard in sync with
-// window.__echoExternalLoaderUi.version and ShinawaseLoader.mjs (uiVersion < 48).
-if (window.__echoExternalLoaderUi?.version >= 48) return 'already';
+// Loader UI generation 49. Keep this guard in sync with
+// window.__echoExternalLoaderUi.version and ShinawaseLoader.mjs (uiVersion < 49).
+if (window.__echoExternalLoaderUi?.version >= 49) return 'already';
 window.__echoExternalLoaderUi?.dispose?.();
 
 const base = 'http://127.0.0.1:' + LOADER_PORT;
@@ -479,6 +479,8 @@ css.textContent = `
     box-shadow: 0 0 0 3px var(--shl-focus-ring);
   }
   .echo-mod-drop.is-over .echo-drop-icon { transform: scale(1.08); }
+  .echo-mod-drop.is-locked, .settings-action-button.is-locked { opacity: 0.58; }
+  .echo-mod-drop.is-locked .echo-drop-icon { opacity: 0.55; }
 
   /* ---- Mod cards ---- */
   .echo-mod-list { display: flex; flex-direction: column; gap: 12px; }
@@ -3063,20 +3065,34 @@ const syncMarketAccount = () => {
       nameEl.textContent = marketUser.displayName || marketUser.username || '';
     }
     if (logout) logout.hidden = false;
-    if (uploadBtn) uploadBtn.hidden = false;
-    if (drop) drop.hidden = !!managing;
+    if (uploadBtn) {
+      uploadBtn.hidden = !!managing;
+      uploadBtn.classList.remove('is-locked');
+    }
+    if (drop) {
+      drop.hidden = !!managing;
+      drop.classList.remove('is-locked');
+    }
     const manageBtn = marketPanel.querySelector('[data-action="manage"]');
     if (manageBtn) manageBtn.hidden = false;
   } else {
     if (openLogin) openLogin.hidden = false;
     if (nameEl) nameEl.hidden = true;
     if (logout) logout.hidden = true;
-    if (uploadBtn) uploadBtn.hidden = true;
-    if (drop) drop.hidden = true;
+    if (uploadBtn) {
+      uploadBtn.hidden = !!managing;
+      uploadBtn.classList.add('is-locked');
+    }
+    if (drop) {
+      drop.hidden = !!managing;
+      drop.classList.add('is-locked');
+    }
     const manageBtn = marketPanel.querySelector('[data-action="manage"]');
     if (manageBtn) manageBtn.hidden = true;
     showMarketManage(false);
   }
+  const dropLabel = marketPanel.querySelector('[data-upload-label]');
+  if (dropLabel) dropLabel.textContent = marketUser ? (T.marketUploadHint || T.dropHint) : (T.marketUploadLocked || T.marketUploadHint || '');
 };
 const loadMarket = async (force = false) => {
   if (!marketPanel) return;
@@ -3336,6 +3352,10 @@ const renderMarketManage = () => {
 };
 const processMarketUpload = async (file) => {
   if (!file || marketBusyId) return;
+  if (!marketUser) {
+    setMarketLoginOpen(true);
+    return;
+  }
   marketBusyId = 'upload';
   const dropLabel = marketPanel?.querySelector('[data-upload-label]');
   if (dropLabel) dropLabel.textContent = T.marketUploading || T.installingMarket;
@@ -3378,12 +3398,12 @@ const openMarket = async () => {
         </div>
         <div class="echo-mod-actions">
           <input type="file" accept=".echomod,.echo" data-upload-file hidden>
+          <button class="settings-action-button" data-action="upload">${T.marketUpload || 'Upload'}</button>
+          <button class="settings-action-button" data-action="manage" hidden>${T.marketManage || 'Manage'}</button>
+          <button class="settings-action-button" data-action="refresh">${T.refreshMarket || 'Refresh'}</button>
           <button class="settings-action-button echo-btn-primary" type="button" data-open-login>${T.marketLogin || '账号登录'}</button>
           <span data-account-name hidden></span>
           <button class="settings-action-button" type="button" data-logout hidden>${T.marketLogout || 'Sign out'}</button>
-          <button class="settings-action-button" data-action="upload" hidden>${T.marketUpload || 'Upload'}</button>
-          <button class="settings-action-button" data-action="manage" hidden>${T.marketManage || 'Manage'}</button>
-          <button class="settings-action-button" data-action="refresh">${T.refreshMarket || 'Refresh'}</button>
         </div>
       </header>
       <div class="echo-market-login-overlay" data-login-overlay hidden>
@@ -3401,7 +3421,7 @@ const openMarket = async () => {
           </form>
         </div>
       </div>
-      <div class="echo-mod-drop" data-upload-drop data-market-chrome hidden>
+      <div class="echo-mod-drop" data-upload-drop data-market-chrome>
         <span class="echo-drop-icon" aria-hidden="true">${iconUpload}</span>
         <span data-upload-label></span>
       </div>
@@ -3512,14 +3532,26 @@ const openMarket = async () => {
     marketUser = null;
     await loadMarket(true);
   };
-  marketPanel.querySelector('[data-action="upload"]').onclick = () => fileInput.click();
-  dropzone.onclick = () => fileInput.click();
+  const needMarketLogin = () => {
+    if (marketUser) return false;
+    setMarketLoginOpen(true);
+    return true;
+  };
+  marketPanel.querySelector('[data-action="upload"]').onclick = () => {
+    if (needMarketLogin()) return;
+    fileInput.click();
+  };
+  dropzone.onclick = () => {
+    if (needMarketLogin()) return;
+    fileInput.click();
+  };
   fileInput.onchange = () => { const file = fileInput.files?.[0]; if (file) processMarketUpload(file); fileInput.value = ''; };
-  dropzone.ondragover = (event) => { event.preventDefault(); dropzone.classList.add('is-over'); };
+  dropzone.ondragover = (event) => { event.preventDefault(); if (!marketUser) return; dropzone.classList.add('is-over'); };
   dropzone.ondragleave = (event) => { if (dropzone.contains(event.relatedTarget)) return; dropzone.classList.remove('is-over'); };
   dropzone.ondrop = (event) => {
     event.preventDefault();
     dropzone.classList.remove('is-over');
+    if (needMarketLogin()) return;
     const file = event.dataTransfer?.files?.[0];
     if (file) processMarketUpload(file);
   };
@@ -3864,7 +3896,7 @@ document.addEventListener('click', (event) => {
 }, true);
 
 window.__echoExternalLoaderUi = {
-  version: 48,
+  version: 49,
   registerSidebar,
   unregisterSidebar: removeSidebar,
   uiSettings: () => ({ ...uiSettings }),

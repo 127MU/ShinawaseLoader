@@ -246,6 +246,7 @@ h2 { margin: 0; font-size: 16px; font-weight: 800; font-family: var(--echo-displ
   border-style: solid; color: var(--echo-navy); background: rgba(255, 217, 74, 0.28);
   box-shadow: var(--echo-sticker);
 }
+.drop.is-locked { opacity: 0.58; }
 .empty {
   display: grid; justify-items: center; gap: 6px; padding: 44px 24px 36px; text-align: center;
   border: 2.5px dashed var(--echo-navy); color: var(--muted); background: var(--panel);

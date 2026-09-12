@@ -537,13 +537,20 @@
   const bindDrop = () => {
     const drop = $('[data-drop]');
     const input = $('[data-file]');
-    drop.onclick = () => input.click();
+    const needLogin = () => {
+      if (state.user) return false;
+      const overlay = $('[data-login-overlay]');
+      if (overlay) overlay.hidden = false;
+      return true;
+    };
+    drop.onclick = () => { if (needLogin()) return; input.click(); };
     input.onchange = () => { upload(input.files?.[0]); input.value = ''; };
-    drop.ondragover = (event) => { event.preventDefault(); drop.classList.add('is-over'); };
+    drop.ondragover = (event) => { event.preventDefault(); if (state.user) drop.classList.add('is-over'); };
     drop.ondragleave = () => drop.classList.remove('is-over');
     drop.ondrop = (event) => {
       event.preventDefault();
       drop.classList.remove('is-over');
+      if (needLogin()) return;
       void upload(event.dataTransfer?.files?.[0]);
     };
   };
@@ -606,7 +613,10 @@
     if (gate) gate.hidden = true;
     if (app) app.hidden = false;
     const drop = $('[data-drop]');
-    if (drop) drop.hidden = !state.user;
+    if (drop) {
+      drop.hidden = false;
+      drop.classList.toggle('is-locked', !state.user);
+    }
     const loginLink = $('[data-login-link]');
     if (loginLink) loginLink.hidden = Boolean(state.user);
     const loginOverlay = $('[data-login-overlay]');
