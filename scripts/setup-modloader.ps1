@@ -627,7 +627,8 @@ function Get-NodeRuntime($versionInfo, $loaderRoot) {
   New-Item -ItemType Directory -Force -Path $RuntimeCache | Out-Null
   $cacheDir = Join-Path $RuntimeCache ("node-" + $versionInfo.nodeVersion)
   $cacheNode = Join-Path $cacheDir 'node.exe'
-  if (-not (Test-Path -LiteralPath $cacheNode)) {
+  $cacheNpm = Join-Path $cacheDir 'node_modules\npm\bin\npm-cli.js'
+  if (-not (Test-Path -LiteralPath $cacheNode) -or -not (Test-Path -LiteralPath $cacheNpm)) {
     $zip = Join-Path $RuntimeCache ("node-" + $versionInfo.nodeVersion + '.zip')
     $extract = Join-Path $RuntimeCache (".node-" + [guid]::NewGuid().ToString('N'))
     try {
@@ -636,11 +637,46 @@ function Get-NodeRuntime($versionInfo, $loaderRoot) {
       $downloaded = Get-ChildItem -LiteralPath $extract -Filter 'node.exe' -File -Recurse | Select-Object -First 1
       if (-not $downloaded) { throw 'node.exe was not found in the downloaded archive.' }
       New-Item -ItemType Directory -Force -Path $cacheDir | Out-Null
-      Copy-Item -LiteralPath $downloaded.FullName -Destination $cacheNode -Force
+      Copy-Item -LiteralPath (Join-Path $downloaded.Directory.FullName '*') -Destination $cacheDir -Recurse -Force
     } finally { Remove-Item -LiteralPath $zip, $extract -Recurse -Force -ErrorAction SilentlyContinue }
   }
   $localNode = Join-Path $loaderRoot 'node.exe'
-  try { Copy-Item -LiteralPath $cacheNode -Destination $localNode -Force; return $localNode } catch { return $cacheNode }
+  try {
+    Copy-Item -LiteralPath $cacheNode -Destination $localNode -Force
+    foreach ($name in @('npm.cmd', 'npm', 'npx.cmd', 'npx', 'corepack.cmd', 'corepack')) {
+      $src = Join-Path $cacheDir $name
+      if (Test-Path -LiteralPath $src) { Copy-Item -LiteralPath $src -Destination (Join-Path $loaderRoot $name) -Force }
+    }
+    $npmSrc = Join-Path $cacheDir 'node_modules\npm'
+    if (Test-Path -LiteralPath $npmSrc) {
+      New-Item -ItemType Directory -Force -Path (Join-Path $loaderRoot 'node_modules') | Out-Null
+      Copy-Item -LiteralPath $npmSrc -Destination (Join-Path $loaderRoot 'node_modules\npm') -Recurse -Force
+    }
+    return $localNode
+  } catch { return $cacheNode }
+}
+
+function Install-StreamingBridgeDeps([string]$loaderRoot, [string]$node) {
+  if (-not (Test-Path -LiteralPath (Join-Path $loaderRoot 'package.json'))) { return }
+  Write-SetupProgress 58 'streaming bridge deps (npm install)'
+  $npmCli = Join-Path $loaderRoot 'node_modules\npm\bin\npm-cli.js'
+  if (-not (Test-Path -LiteralPath $npmCli)) {
+    $npmCli = Join-Path (Split-Path -Parent $node) 'node_modules\npm\bin\npm-cli.js'
+  }
+  try {
+    Push-Location $loaderRoot
+    if (Test-Path -LiteralPath $npmCli) {
+      & $node $npmCli install --omit=dev --no-audit --no-fund 2>&1 | Out-Null
+    } else {
+      $npmCmd = Get-Command npm.cmd -ErrorAction SilentlyContinue
+      if (-not $npmCmd) { $npmCmd = Get-Command npm -ErrorAction SilentlyContinue }
+      if (-not $npmCmd) { throw 'npm not found' }
+      & $npmCmd.Source install --omit=dev --no-audit --no-fund 2>&1 | Out-Null
+    }
+    if ($LASTEXITCODE -ne 0) { throw "npm install exit $LASTEXITCODE" }
+  } catch {
+    Write-Host "npm install failed: $($_.Exception.Message) - netease streaming stays degraded until dependencies are installed." -ForegroundColor Yellow
+  } finally { Pop-Location }
 }
 
 function Stop-Loader($loaderRoot) {
@@ -721,21 +757,9 @@ function Copy-Loader([string]$source, [string]$echoExe, $versionInfo, [bool]$Ena
   # The streaming bridge needs @neteasecloudmusicapienhanced/api installed next
   # to streaming-bridge.cjs (see ShinawaseLoader/package.json); without it the
   # netease provider falls back to raw HTTP endpoints that now return 404.
-  if (Test-Path -LiteralPath (Join-Path $loaderRoot 'package.json')) {
-    Write-SetupProgress 58 'streaming bridge deps (npm install)'
-    $npmCmd = Get-Command npm.cmd -ErrorAction SilentlyContinue
-    if (-not $npmCmd) { $npmCmd = Get-Command npm -ErrorAction SilentlyContinue }
-    if ($npmCmd) {
-      try {
-        Push-Location $loaderRoot
-        & $npmCmd.Source install --omit=dev --no-audit --no-fund 2>&1 | Out-Null
-      } catch {
-        Write-Host "npm install failed: $($_.Exception.Message) - netease streaming stays degraded until dependencies are installed." -ForegroundColor Yellow
-      } finally { Pop-Location }
-    } else {
-      Write-Host 'npm not found - run "npm install --omit=dev" inside the ShinawaseLoader folder to enable netease streaming playback.' -ForegroundColor Yellow
-    }
-  }
+  # Use npm shipped inside the portable Node zip — PATH often has neither npm
+  # nor a global Node after the installer only copies node.exe.
+  Install-StreamingBridgeDeps $loaderRoot $node
   $config | Add-Member -NotePropertyName autoStart -NotePropertyValue $true -Force
   $config | Add-Member -NotePropertyName autoStartMode -NotePropertyValue 'app-asar-bridge' -Force
   Write-Json $configPath $config
