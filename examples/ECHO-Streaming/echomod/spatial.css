@@ -2184,6 +2184,46 @@
   resize: vertical;
 }
 
+.streaming-account-dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 230;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  box-sizing: border-box;
+  background: rgba(8, 10, 14, 0.55);
+  backdrop-filter: blur(10px);
+}
+.streaming-account-dialog {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  width: min(920px, calc(100vw - 32px));
+  height: min(720px, calc(100vh - 48px));
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--theme-panel-border, rgba(38, 40, 46, 0.14));
+  border-radius: 14px;
+  background: var(--theme-panel-bg, #fff);
+  box-shadow: 0 24px 64px rgba(16, 19, 24, 0.28);
+}
+.streaming-account-dialog-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--theme-panel-border, rgba(38, 40, 46, 0.12));
+}
+.streaming-account-dialog-bar strong { margin-right: auto; font-size: 15px; }
+.streaming-account-dialog-body {
+  min-height: 0;
+  overflow: auto;
+}
+.streaming-account-dialog-body .streaming-account-page {
+  height: auto;
+  min-height: 100%;
+}
+
 /* NetEase QR login dialog — self-contained so Steam hosts without full
    settings-qr CSS still get a centered, closable card (ECHODev layout). */
 .settings-qr-login-backdrop[data-echo-streaming-qr] {

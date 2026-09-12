@@ -578,6 +578,17 @@
       event.preventDefault();
       showView('market');
     });
+    const loginLink = $('[data-login-link]');
+    const loginOverlay = $('[data-login-overlay]');
+    if (loginLink && loginOverlay) {
+      loginLink.addEventListener('click', (event) => {
+        event.preventDefault();
+        loginOverlay.hidden = false;
+      });
+      loginOverlay.addEventListener('click', (event) => {
+        if (event.target === loginOverlay) loginOverlay.hidden = true;
+      });
+    }
   };
   const load = async (opts = {}) => {
     const stayManage = opts.stay === 'manage' || location.hash.startsWith('#manage');
@@ -598,6 +609,8 @@
     if (drop) drop.hidden = !state.user;
     const loginLink = $('[data-login-link]');
     if (loginLink) loginLink.hidden = Boolean(state.user);
+    const loginOverlay = $('[data-login-overlay]');
+    if (state.user && loginOverlay) loginOverlay.hidden = true;
     if (!state.user) {
       if (userEl) userEl.hidden = true;
       hideManage();

@@ -1,6 +1,6 @@
-// Loader UI generation 45. Keep this guard in sync with
-// window.__echoExternalLoaderUi.version and ShinawaseLoader.mjs (uiVersion < 45).
-if (window.__echoExternalLoaderUi?.version >= 45) return 'already';
+// Loader UI generation 46. Keep this guard in sync with
+// window.__echoExternalLoaderUi.version and ShinawaseLoader.mjs (uiVersion < 46).
+if (window.__echoExternalLoaderUi?.version >= 46) return 'already';
 window.__echoExternalLoaderUi?.dispose?.();
 
 const base = 'http://127.0.0.1:' + LOADER_PORT;
@@ -656,11 +656,29 @@ css.textContent = `
     padding: 12px 14px; border: 1px solid var(--shl-border); border-radius: 14px;
     background: var(--shl-panel);
   }
-  .echo-market-login input {
-    min-width: 160px; height: 34px; padding: 0 10px;
+  .echo-market-login-overlay {
+    position: fixed; inset: 0; z-index: 420; display: grid; place-items: center;
+    padding: 24px;
+    background: color-mix(in srgb, #0a0d13 58%, transparent);
+    backdrop-filter: blur(18px) saturate(1.15); -webkit-backdrop-filter: blur(18px) saturate(1.15);
+  }
+  .echo-market-login-overlay[hidden] { display: none !important; }
+  .echo-market-login-card {
+    width: min(420px, calc(100vw - 48px));
+    display: grid; gap: 14px; padding: 18px 20px 16px;
+    background: var(--shl-panel); color: var(--theme-page-text, inherit);
+    border: 1px solid var(--shl-border); border-radius: 18px;
+    box-shadow: var(--shl-shadow-panel);
+  }
+  .echo-market-login-card h2 { margin: 0; font-size: 17px; font-weight: 650; }
+  .echo-market-login-card .echo-config-desc { margin: 0; }
+  .echo-market-login-card form { display: grid; gap: 10px; }
+  .echo-market-login-card input {
+    width: 100%; height: 36px; padding: 0 10px; box-sizing: border-box;
     border: 1px solid var(--shl-field-border); border-radius: 10px;
     background: var(--shl-field-bg); color: inherit; font: 13px var(--shl-font);
   }
+  .echo-market-login-actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
   .echo-market-account { justify-content: space-between; }
   .echo-md { display: grid; gap: 8px; font-size: 13px; line-height: 1.65; }
   .echo-md h3, .echo-md h4 { margin: 6px 0 0; font-size: 14px; }
@@ -3022,15 +3040,22 @@ const renderMarketList = () => {
   }
   list.replaceChildren(...items.map((item, index) => renderMarketCard(item, index, animate)));
 };
+const setMarketLoginOpen = (open) => {
+  const overlay = marketPanel?.querySelector('[data-login-overlay]');
+  if (!overlay) return;
+  overlay.hidden = !open;
+  if (open) marketPanel.querySelector('[data-login-id]')?.focus();
+};
 const syncMarketAccount = () => {
   if (!marketPanel) return;
-  const login = marketPanel.querySelector('[data-market-login]');
+  const openLogin = marketPanel.querySelector('[data-open-login]');
   const account = marketPanel.querySelector('[data-market-account]');
   const uploadBtn = marketPanel.querySelector('[data-action="upload"]');
   const drop = marketPanel.querySelector('[data-upload-drop]');
   const managing = marketPanel.querySelector('[data-market-manage]') && !marketPanel.querySelector('[data-market-manage]').hidden;
   if (marketUser) {
-    if (login) login.hidden = true;
+    if (openLogin) openLogin.hidden = true;
+    setMarketLoginOpen(false);
     if (account) {
       account.hidden = false;
       account.querySelector('[data-account-name]').textContent = (T.marketLoggedIn || '{name}').replace('{name}', marketUser.displayName || marketUser.username || '');
@@ -3040,7 +3065,7 @@ const syncMarketAccount = () => {
     const manageBtn = marketPanel.querySelector('[data-action="manage"]');
     if (manageBtn) manageBtn.hidden = false;
   } else {
-    if (login) login.hidden = false;
+    if (openLogin) openLogin.hidden = false;
     if (account) account.hidden = true;
     if (uploadBtn) uploadBtn.hidden = true;
     if (drop) drop.hidden = true;
@@ -3354,15 +3379,25 @@ const openMarket = async () => {
           <button class="settings-action-button" data-action="refresh">${T.refreshMarket || 'Refresh'}</button>
         </div>
       </header>
-      <form class="echo-market-login" data-market-login>
-        <p class="echo-config-desc">${T.marketLoginHint || ''}</p>
-        <input data-login-id autocomplete="username" placeholder="${T.marketLoginUser || 'Username'}">
-        <input data-login-pass type="password" autocomplete="current-password" placeholder="${T.marketLoginPass || 'Password'}">
-        <button class="settings-action-button echo-btn-primary" type="submit">${T.marketLogin || 'Sign in'}</button>
-      </form>
+      <button class="settings-action-button echo-btn-primary" type="button" data-open-login>${T.marketLogin || '账号登录'}</button>
       <div class="echo-market-account" data-market-account hidden>
         <span data-account-name></span>
         <button class="settings-action-button" type="button" data-logout>${T.marketLogout || 'Sign out'}</button>
+      </div>
+      <div class="echo-market-login-overlay" data-login-overlay hidden>
+        <div class="echo-market-login-card">
+          <h2>${T.marketLogin || '账号登录'}</h2>
+          <p class="echo-config-desc">${T.marketLoginHint || ''}</p>
+          <form data-market-login>
+            <input data-login-id autocomplete="username" placeholder="${T.marketLoginUser || 'Username'}">
+            <input data-login-pass type="password" autocomplete="current-password" placeholder="${T.marketLoginPass || 'Password'}">
+            <div class="echo-market-login-actions">
+              <a class="settings-action-button" data-register href="https://echo.shiinasuki.com/register" target="_blank" rel="noopener">${T.marketRegister || '前往注册'}</a>
+              <button class="settings-action-button" type="button" data-login-close>${T.close || 'Close'}</button>
+              <button class="settings-action-button echo-btn-primary" type="submit">${T.marketLogin || '账号登录'}</button>
+            </div>
+          </form>
+        </div>
       </div>
       <div class="echo-mod-drop" data-upload-drop data-market-chrome hidden>
         <span class="echo-drop-icon" aria-hidden="true">${iconUpload}</span>
@@ -3445,6 +3480,11 @@ const openMarket = async () => {
   marketPanel.querySelector('[data-action="refresh"]').onclick = () => void loadMarket(true);
   marketPanel.querySelector('[data-action="manage"]').onclick = () => showMarketManage(true);
   marketPanel.querySelector('[data-manage-back]').onclick = () => showMarketManage(false);
+  marketPanel.querySelector('[data-open-login]').onclick = () => setMarketLoginOpen(true);
+  marketPanel.querySelector('[data-login-close]').onclick = () => setMarketLoginOpen(false);
+  marketPanel.querySelector('[data-login-overlay]').onclick = (event) => {
+    if (event.target === event.currentTarget) setMarketLoginOpen(false);
+  };
   marketPanel.querySelector('[data-market-login]').onsubmit = async (event) => {
     event.preventDefault();
     try {
@@ -3458,6 +3498,7 @@ const openMarket = async () => {
       });
       marketUser = result.user || null;
       marketPanel.querySelector('[data-login-pass]').value = '';
+      setMarketLoginOpen(false);
       toast((T.marketLoggedIn || '{name}').replace('{name}', marketUser?.displayName || marketUser?.username || ''), 'success');
       await loadMarket(true);
     } catch (error) {
@@ -3816,7 +3857,7 @@ document.addEventListener('click', (event) => {
 }, true);
 
 window.__echoExternalLoaderUi = {
-  version: 45,
+  version: 46,
   registerSidebar,
   unregisterSidebar: removeSidebar,
   uiSettings: () => ({ ...uiSettings }),

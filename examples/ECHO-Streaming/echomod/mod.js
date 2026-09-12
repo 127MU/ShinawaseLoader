@@ -126,7 +126,13 @@ state.neteasePassword = '';
 state.neteaseCountry = '86';
 const accountStatusFor = (provider) => state.accountStatuses.find((item) => item.provider === provider) || { provider, connected: false, username: null, displayName: null, avatarUrl: null, error: null };
 const mergeAccountStatus = (status) => { if (!status?.provider) return; state.accountStatuses = [...state.accountStatuses.filter((item) => item.provider !== status.provider), status]; };
-const refreshAccountPage = () => { if (accountRoot && !accountDisposed) accountRoot.replaceChildren(renderAccountPage()); else if (!disposed) render(); };
+const refreshAccountPage = () => {
+  if (accountRoot && !accountDisposed) {
+    accountRoot.replaceChildren(renderAccountPage());
+    const link = document.querySelector('[data-echo-account-dialog] [data-account-register]');
+    if (link) link.href = accountRegisterUrl();
+  } else if (!disposed) render();
+};
 const loadAccountStatuses = async () => { const api = accountApi(); if (!api?.getStatuses) throw new Error(accountText('桌面账号桥接不可用，请重启 ECHO。', 'Desktop account bridge is unavailable. Restart ECHO.')); state.accountStatuses = await api.getStatuses(); refreshAccountPage(); return state.accountStatuses; };
 const accountAction = async (provider, action, work) => { state.accountBusy[provider] = action; state.accountErrors[provider] = null; state.accountMessages[provider] = null; refreshAccountPage(); try { const result = await work(); if (result?.status) mergeAccountStatus(result.status); else if (result?.provider) mergeAccountStatus(result); if (result?.message) state.accountMessages[provider] = result.message; await loadAccountStatuses(); await loadProviders(true).catch(() => undefined); } catch (error) { state.accountErrors[provider] = error instanceof Error ? error.message : String(error); refreshAccountPage(); } finally { delete state.accountBusy[provider]; refreshAccountPage(); } };
 const setAccountBrowser = (provider, browser) => void accountAction(provider, 'browser', async () => { state.accountBrowsers[provider] = browser; const result = await accountApi().setBrowser(provider, browser); mergeAccountStatus(result); return result; });
@@ -334,21 +340,53 @@ const libraryApi = () => external.echo?.library || window.echo?.library;
 const accountsSidebarIdSuffix = ':accounts';
 const findAccountsSidebarButton = () => document.querySelector('[data-echo-external-sidebar$="' + accountsSidebarIdSuffix + '"]')
   || document.querySelector('[data-echo-external-sidebar="accounts"]');
+const accountRegisterUrl = () => ({
+  netease: 'https://music.163.com',
+  qqmusic: 'https://y.qq.com',
+  soundcloud: 'https://soundcloud.com/signup',
+  spotify: 'https://www.spotify.com/signup',
+  tidal: 'https://tidal.com',
+  qobuz: 'https://www.qobuz.com/signup',
+  bilibili: 'https://passport.bilibili.com/register',
+  youtube: 'https://accounts.google.com/signup',
+}[state.selectedAccountProvider] || 'https://echo.shiinasuki.com/register');
+const closeAccountDialog = () => {
+  document.querySelector('[data-echo-account-dialog]')?.remove();
+  accountRoot = null;
+  accountDisposed = true;
+  stopAccountQrPolling();
+};
 const openAccountsSidebar = (options = {}) => {
   if (options.provider) state.selectedAccountProvider = options.provider;
-  const tryOpen = (attempt = 0) => {
-    const button = findAccountsSidebarButton();
-    if (button) {
-      button.click();
-      void loadAccountStatuses().catch((error) => {
-        state.accountErrors.__global = error instanceof Error ? error.message : String(error);
-        refreshAccountPage();
-      });
-      return;
-    }
-    if (attempt < 12) window.setTimeout(() => tryOpen(attempt + 1), 120);
-  };
-  tryOpen();
+  accountDisposed = false;
+  let overlay = document.querySelector('[data-echo-account-dialog]');
+  if (!overlay) {
+    overlay = make('div', 'streaming-account-dialog-backdrop');
+    overlay.dataset.echoAccountDialog = 'true';
+    overlay.addEventListener('click', (event) => { if (event.target === overlay) closeAccountDialog(); });
+    document.body.append(overlay);
+  }
+  const dialog = make('div', 'streaming-account-dialog');
+  const bar = make('header', 'streaming-account-dialog-bar');
+  bar.append(make('strong', '', copy.accounts));
+  const register = make('a', 'settings-action-button');
+  register.href = accountRegisterUrl();
+  register.target = '_blank';
+  register.rel = 'noopener';
+  register.textContent = accountText('前往注册', 'Create an account');
+  register.dataset.accountRegister = 'true';
+  bar.append(register, actionButton(accountText('关闭', 'Close'), 'close', closeAccountDialog, { className: 'settings-action-button' }));
+  const body = make('div', 'streaming-account-dialog-body');
+  accountRoot = body;
+  body.replaceChildren(renderAccountPage());
+  dialog.append(bar, body);
+  overlay.replaceChildren(dialog);
+  const link = overlay.querySelector('[data-account-register]');
+  if (link) link.href = accountRegisterUrl();
+  void loadAccountStatuses().catch((error) => {
+    state.accountErrors.__global = error instanceof Error ? error.message : String(error);
+    refreshAccountPage();
+  });
 };
 const openAccountPage = (provider) => openAccountsSidebar(provider ? { provider } : {});
 const removeNeteaseQrBackdrop = () => {
@@ -5295,4 +5333,4 @@ accountsSidebarUnsubscribe = external.sidebar.register({
     };
   },
 });
-return () => { disposed = true; packageDisposed = true; window.clearTimeout(searchTimer); window.clearInterval(statusTimer); window.clearInterval(dailyRefreshTimer); window.clearInterval(ncmPlayerPoll); document.removeEventListener('click', onUnavailableStreamingPlaylistClick, true); resetSearchInput(); cancelPlaybackPrepare(); stopAccountQrPolling(); closeStreamMenu(); closePlaylistDownloadDialog(); disposeTogetherChrome(); document.querySelectorAll('.echo-streaming-comment-panel, .echo-streaming-similar-panel').forEach((node) => node.remove()); accountUnsubscribe?.(); downloadUnsubscribe?.(); playlistPageUnsubscribe?.(); artistStreamingAlbumsUnsubscribe?.(); document.querySelectorAll('.settings-qr-login-backdrop[data-echo-streaming-qr]').forEach((node) => node.remove()); document.getElementById('echo-community-streaming-spatial')?.remove(); document.getElementById('echo-artist-streaming-albums-style')?.remove(); document.querySelectorAll('[data-echo-artist-streaming-albums], [data-echo-artist-streaming-album-detail-panel]').forEach((node) => node.remove()); disposeSidebar?.(); accountsSidebarUnsubscribe?.(); qobuzSidebarUnsubscribe?.(); };
+return () => { disposed = true; packageDisposed = true; window.clearTimeout(searchTimer); window.clearInterval(statusTimer); window.clearInterval(dailyRefreshTimer); window.clearInterval(ncmPlayerPoll); document.removeEventListener('click', onUnavailableStreamingPlaylistClick, true); resetSearchInput(); cancelPlaybackPrepare(); stopAccountQrPolling(); closeAccountDialog(); closeStreamMenu(); closePlaylistDownloadDialog(); disposeTogetherChrome(); document.querySelectorAll('.echo-streaming-comment-panel, .echo-streaming-similar-panel').forEach((node) => node.remove()); accountUnsubscribe?.(); downloadUnsubscribe?.(); playlistPageUnsubscribe?.(); artistStreamingAlbumsUnsubscribe?.(); document.querySelectorAll('.settings-qr-login-backdrop[data-echo-streaming-qr]').forEach((node) => node.remove()); document.getElementById('echo-community-streaming-spatial')?.remove(); document.getElementById('echo-artist-streaming-albums-style')?.remove(); document.querySelectorAll('[data-echo-artist-streaming-albums], [data-echo-artist-streaming-album-detail-panel]').forEach((node) => node.remove()); disposeSidebar?.(); accountsSidebarUnsubscribe?.(); qobuzSidebarUnsubscribe?.(); };

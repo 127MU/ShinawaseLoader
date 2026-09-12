@@ -122,6 +122,18 @@ body {
 .manage-editor[hidden] { display: none; }
 .manage-actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
 .btn.danger { background: #ffd0e4; }
+.echo-login-overlay {
+  position: fixed; inset: 0; z-index: 40; display: grid; place-items: center;
+  padding: 24px; background: color-mix(in srgb, #0a0d13 55%, transparent);
+}
+.echo-login-overlay[hidden] { display: none !important; }
+.echo-login-card {
+  width: min(420px, calc(100vw - 48px)); display: grid; gap: 12px;
+  padding: 20px; background: var(--panel); border: 2px solid var(--echo-navy);
+  box-shadow: var(--echo-sticker);
+}
+.echo-login-card h2 { margin: 0; }
+.echo-login-card .lead { margin: 0; }
 .badge.unlisted { background: #ffd0e4; }
 html.echo-has-ticker .echo-ticker { top: 58px; }
 html.echo-has-ticker main { padding-top: 70px; }
@@ -373,3 +385,15 @@ footer[data-footer] { margin-top: 28px; color: var(--muted); font-size: 12px; fo
 @keyframes echo-spin {
   to { transform: rotate(360deg); }
 }
+.echo-login-overlay {
+  position: fixed; inset: 0; z-index: 40; display: grid; place-items: center;
+  padding: 24px; background: color-mix(in srgb, #0a0d13 55%, transparent);
+}
+.echo-login-overlay[hidden] { display: none !important; }
+.echo-login-card {
+  width: min(420px, calc(100vw - 48px)); display: grid; gap: 12px;
+  padding: 20px; background: var(--panel); border: 2px solid var(--echo-navy);
+  box-shadow: var(--echo-sticker);
+}
+.echo-login-card h2 { margin: 0; }
+.echo-login-card .lead { margin: 0; }
