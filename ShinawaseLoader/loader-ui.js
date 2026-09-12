@@ -1,6 +1,6 @@
-// Loader UI generation 41. Keep this guard in sync with
-// window.__echoExternalLoaderUi.version and ShinawaseLoader.mjs (uiVersion < 41).
-if (window.__echoExternalLoaderUi?.version >= 41) return 'already';
+// Loader UI generation 42. Keep this guard in sync with
+// window.__echoExternalLoaderUi.version and ShinawaseLoader.mjs (uiVersion < 42).
+if (window.__echoExternalLoaderUi?.version >= 42) return 'already';
 window.__echoExternalLoaderUi?.dispose?.();
 
 const base = 'http://127.0.0.1:' + LOADER_PORT;
@@ -139,6 +139,7 @@ css.textContent = `
     font-family: var(--shl-font);
   }
   .echo-external-mod-panel[hidden], .echo-external-loader-panel[hidden], .echo-external-mod-page[hidden] { display: none !important; }
+  [data-echo-external-sidebar].echo-sidebar-hidden { display: none !important; }
   .echo-external-mod-page {
     grid-row: 2; grid-column: 2; min-width: 0; min-height: 0; overflow: auto;
     background: var(--theme-page-bg, var(--color-bg, #f6f6f7));
@@ -1607,6 +1608,7 @@ const saveUiSettings = async (patch) => {
 
 const hideNativeSurfaces = () => document.querySelectorAll('.page-surface:not([hidden])').forEach((surface) => {
   if (surface.classList.contains('echo-external-loader-panel') || surface.classList.contains('echo-external-mod-panel') || surface.classList.contains('echo-external-mod-page')) return;
+  if (surface.closest('aside.sidebar, .sidebar, .sidebar-groups')) return;
   surface.dataset.echoExternalHidden = 'true';
   surface.setAttribute('hidden', '');
 });
@@ -3541,7 +3543,8 @@ const renderSidebarButtons = () => {
   ensureLoaderButtons(nav);
   for (const [id, button] of sidebarButtons) if (!sidebarEntries.has(id)) { button.remove(); sidebarButtons.delete(id); }
   const entries = [...sidebarEntries.values()].sort((left, right) => (Number(left.order) || 0) - (Number(right.order) || 0) || String(left.label || '').localeCompare(String(right.label || '')));
-  let anchor = marketButton?.nextElementSibling || modsButton?.nextElementSibling || null;
+  const visible = [];
+  const hidden = [];
   for (const entry of entries) {
     let button = sidebarButtons.get(entry.id);
     if (!button || !button.isConnected) {
@@ -3562,13 +3565,17 @@ const renderSidebarButtons = () => {
     button.querySelector('.nav-item-label').textContent = entry.label || entry.id;
     button.setAttribute('aria-label', entry.label || entry.id);
     button.title = entry.label || entry.id;
-    button.hidden = entry.hidden === true;
-    button.style.display = entry.hidden === true ? 'none' : '';
+    button.classList.toggle('echo-sidebar-hidden', entry.hidden === true);
     if (entry.hidden) button.setAttribute('aria-hidden', 'true');
     else button.removeAttribute('aria-hidden');
-    if (button !== anchor) nav.insertBefore(button, anchor);
-    anchor = button.nextElementSibling;
+    (entry.hidden ? hidden : visible).push(button);
   }
+  let anchor = marketButton?.nextSibling || modsButton?.nextSibling || null;
+  for (const button of visible) {
+    if (button !== anchor) nav.insertBefore(button, anchor);
+    anchor = button.nextSibling;
+  }
+  hidden.forEach((button) => nav.append(button));
   return true;
 };
 
@@ -3812,7 +3819,7 @@ document.addEventListener('click', (event) => {
 }, true);
 
 window.__echoExternalLoaderUi = {
-  version: 41,
+  version: 42,
   registerSidebar,
   unregisterSidebar: removeSidebar,
   uiSettings: () => ({ ...uiSettings }),

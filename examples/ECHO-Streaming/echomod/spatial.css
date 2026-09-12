@@ -159,6 +159,7 @@
 
 @scope (.echo-external-mod-page) {
 .streaming-page.streaming-hub--spatial {
+  display: grid;
   grid-template-columns: clamp(210px, 16vw, 252px) minmax(0, 1fr);
   grid-template-rows: minmax(0, 1fr);
   gap: 0;
@@ -1095,12 +1096,17 @@
 }
 
 @media (max-width: 860px) {
+  .streaming-page.streaming-hub--spatial,
   .streaming-hub--spatial {
     grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
   }
 
   .streaming-source-rail {
-    display: none;
+    display: grid;
+    max-height: 42vh;
+    border-right: 0;
+    border-bottom: 1px solid var(--streaming-border, var(--theme-panel-border, rgba(0, 0, 0, 0.08)));
   }
 
   .streaming-workspace {
