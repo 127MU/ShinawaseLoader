@@ -663,20 +663,41 @@ function Install-StreamingBridgeDeps([string]$loaderRoot, [string]$node) {
   if (-not (Test-Path -LiteralPath $npmCli)) {
     $npmCli = Join-Path (Split-Path -Parent $node) 'node_modules\npm\bin\npm-cli.js'
   }
+  $marker = Join-Path $loaderRoot 'node_modules\@neteasecloudmusicapienhanced\api\package.json'
+  $stamp = [guid]::NewGuid().ToString('N')
+  $outLog = Join-Path $env:TEMP ("shinawase-npm-install-" + $stamp + ".out.log")
+  $errLog = Join-Path $env:TEMP ("shinawase-npm-install-" + $stamp + ".err.log")
+  $prev = $ErrorActionPreference
+  $ErrorActionPreference = 'Continue'
+  $code = 1
   try {
     Push-Location $loaderRoot
+    $env:npm_config_engine_strict = 'false'
     if (Test-Path -LiteralPath $npmCli) {
-      & $node $npmCli install --omit=dev --no-audit --no-fund 2>&1 | Out-Null
+      $arg = @($npmCli, 'install', '--omit=dev', '--no-audit', '--no-fund', '--engine-strict=false')
+      $p = Start-Process -FilePath $node -ArgumentList $arg -WorkingDirectory $loaderRoot -Wait -PassThru -WindowStyle Hidden -RedirectStandardOutput $outLog -RedirectStandardError $errLog
+      $code = $p.ExitCode
     } else {
       $npmCmd = Get-Command npm.cmd -ErrorAction SilentlyContinue
       if (-not $npmCmd) { $npmCmd = Get-Command npm -ErrorAction SilentlyContinue }
       if (-not $npmCmd) { throw 'npm not found' }
-      & $npmCmd.Source install --omit=dev --no-audit --no-fund 2>&1 | Out-Null
+      $p = Start-Process -FilePath $npmCmd.Source -ArgumentList @('install', '--omit=dev', '--no-audit', '--no-fund', '--engine-strict=false') -WorkingDirectory $loaderRoot -Wait -PassThru -WindowStyle Hidden -RedirectStandardOutput $outLog -RedirectStandardError $errLog
+      $code = $p.ExitCode
     }
-    if ($LASTEXITCODE -ne 0) { throw "npm install exit $LASTEXITCODE" }
   } catch {
-    Write-Host "npm install failed: $($_.Exception.Message) - netease streaming stays degraded until dependencies are installed." -ForegroundColor Yellow
-  } finally { Pop-Location }
+    $code = 1
+    $_ | Out-String | Set-Content -LiteralPath $errLog -ErrorAction SilentlyContinue
+  } finally {
+    $ErrorActionPreference = $prev
+    Pop-Location
+  }
+  if (Test-Path -LiteralPath $marker) { return }
+  $hint = @($errLog, $outLog) | ForEach-Object {
+    if (Test-Path -LiteralPath $_) { Get-Content -LiteralPath $_ -ErrorAction SilentlyContinue }
+  } | Select-Object -Last 8
+  $hint = (($hint -join ' ').Trim())
+  if (-not $hint) { $hint = "exit $code" }
+  Write-Host "npm install failed: $hint - netease streaming stays degraded until dependencies are installed." -ForegroundColor Yellow
 }
 
 function Stop-Loader($loaderRoot) {
