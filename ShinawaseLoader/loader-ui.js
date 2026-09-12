@@ -1,6 +1,6 @@
-// Loader UI generation 47. Keep this guard in sync with
-// window.__echoExternalLoaderUi.version and ShinawaseLoader.mjs (uiVersion < 47).
-if (window.__echoExternalLoaderUi?.version >= 47) return 'already';
+// Loader UI generation 48. Keep this guard in sync with
+// window.__echoExternalLoaderUi.version and ShinawaseLoader.mjs (uiVersion < 48).
+if (window.__echoExternalLoaderUi?.version >= 48) return 'already';
 window.__echoExternalLoaderUi?.dispose?.();
 
 const base = 'http://127.0.0.1:' + LOADER_PORT;
@@ -369,6 +369,10 @@ css.textContent = `
   }
   .echo-mod-header p { margin: 8px 0 0; max-width: 62ch; color: var(--shl-muted); font-size: 13.5px; line-height: 1.55; }
   .echo-mod-actions { display: flex; flex-wrap: nowrap; align-items: center; gap: 8px; flex: none; }
+  .echo-mod-actions [data-account-name] {
+    max-width: 12ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    color: var(--shl-muted); font-size: 12.5px;
+  }
   .echo-mod-toolbar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
   .echo-search { position: relative; flex: 1 1 260px; min-width: 200px; }
   .echo-search-icon {
@@ -1757,9 +1761,6 @@ const ensureLoaderButtons = (nav) => {
   loaderButton = makeNavButton(nav, 'loader', T.loader, loaderNavIcon, openLoader);
   marketButton = makeNavButton(nav, 'market', T.market || 'Mod Market', marketNavIcon, openMarket);
   modsButton = makeNavButton(nav, 'mods', T.mods, modsNavIcon, openMods);
-  if (modsButton.parentElement !== nav) nav.append(modsButton);
-  if (marketButton.parentElement !== nav || marketButton.nextElementSibling !== modsButton) nav.insertBefore(marketButton, modsButton);
-  if (loaderButton.parentElement !== nav || loaderButton.nextElementSibling !== marketButton) nav.insertBefore(loaderButton, marketButton);
   return modsButton;
 };
 
@@ -3049,24 +3050,27 @@ const setMarketLoginOpen = (open) => {
 const syncMarketAccount = () => {
   if (!marketPanel) return;
   const openLogin = marketPanel.querySelector('[data-open-login]');
-  const account = marketPanel.querySelector('[data-market-account]');
+  const nameEl = marketPanel.querySelector('[data-account-name]');
+  const logout = marketPanel.querySelector('[data-logout]');
   const uploadBtn = marketPanel.querySelector('[data-action="upload"]');
   const drop = marketPanel.querySelector('[data-upload-drop]');
   const managing = marketPanel.querySelector('[data-market-manage]') && !marketPanel.querySelector('[data-market-manage]').hidden;
   if (marketUser) {
     if (openLogin) openLogin.hidden = true;
     setMarketLoginOpen(false);
-    if (account) {
-      account.hidden = false;
-      account.querySelector('[data-account-name]').textContent = (T.marketLoggedIn || '{name}').replace('{name}', marketUser.displayName || marketUser.username || '');
+    if (nameEl) {
+      nameEl.hidden = false;
+      nameEl.textContent = marketUser.displayName || marketUser.username || '';
     }
+    if (logout) logout.hidden = false;
     if (uploadBtn) uploadBtn.hidden = false;
     if (drop) drop.hidden = !!managing;
     const manageBtn = marketPanel.querySelector('[data-action="manage"]');
     if (manageBtn) manageBtn.hidden = false;
   } else {
     if (openLogin) openLogin.hidden = false;
-    if (account) account.hidden = true;
+    if (nameEl) nameEl.hidden = true;
+    if (logout) logout.hidden = true;
     if (uploadBtn) uploadBtn.hidden = true;
     if (drop) drop.hidden = true;
     const manageBtn = marketPanel.querySelector('[data-action="manage"]');
@@ -3374,16 +3378,14 @@ const openMarket = async () => {
         </div>
         <div class="echo-mod-actions">
           <input type="file" accept=".echomod,.echo" data-upload-file hidden>
+          <button class="settings-action-button echo-btn-primary" type="button" data-open-login>${T.marketLogin || '账号登录'}</button>
+          <span data-account-name hidden></span>
+          <button class="settings-action-button" type="button" data-logout hidden>${T.marketLogout || 'Sign out'}</button>
           <button class="settings-action-button" data-action="upload" hidden>${T.marketUpload || 'Upload'}</button>
           <button class="settings-action-button" data-action="manage" hidden>${T.marketManage || 'Manage'}</button>
           <button class="settings-action-button" data-action="refresh">${T.refreshMarket || 'Refresh'}</button>
         </div>
       </header>
-      <button class="settings-action-button echo-btn-primary" type="button" data-open-login>${T.marketLogin || '账号登录'}</button>
-      <div class="echo-market-account" data-market-account hidden>
-        <span data-account-name></span>
-        <button class="settings-action-button" type="button" data-logout>${T.marketLogout || 'Sign out'}</button>
-      </div>
       <div class="echo-market-login-overlay" data-login-overlay hidden>
         <div class="echo-market-login-card">
           <h2>${T.marketLogin || '账号登录'}</h2>
@@ -3586,7 +3588,7 @@ const renderSidebarButtons = () => {
   ensureLoaderButtons(nav);
   for (const [id, button] of sidebarButtons) if (!sidebarEntries.has(id)) { button.remove(); sidebarButtons.delete(id); }
   const entries = [...sidebarEntries.values()].sort((left, right) => (Number(left.order) || 0) - (Number(right.order) || 0) || String(left.label || '').localeCompare(String(right.label || '')));
-  let anchor = modsButton?.nextElementSibling || marketButton?.nextElementSibling || null;
+  const visible = [];
   for (const entry of entries) {
     let button = sidebarButtons.get(entry.id);
     if (!button || !button.isConnected) {
@@ -3610,12 +3612,14 @@ const renderSidebarButtons = () => {
     button.querySelector('.nav-item-label').textContent = entry.label || entry.id;
     button.setAttribute('aria-label', entry.label || entry.id);
     button.title = entry.label || entry.id;
-    if (entry.hidden) {
-      hiddenSidebarStash().append(button);
-      continue;
-    }
-    if (button !== anchor) nav.insertBefore(button, anchor);
-    anchor = button.nextElementSibling;
+    if (entry.hidden) hiddenSidebarStash().append(button);
+    else visible.push(button);
+  }
+  const rail = [loaderButton, marketButton, modsButton, ...visible].filter(Boolean);
+  for (let index = rail.length - 1; index >= 0; index -= 1) {
+    const button = rail[index];
+    const before = rail[index + 1] || null;
+    if (button.parentElement !== nav || button.nextElementSibling !== before) nav.insertBefore(button, before);
   }
   return true;
 };
@@ -3860,7 +3864,7 @@ document.addEventListener('click', (event) => {
 }, true);
 
 window.__echoExternalLoaderUi = {
-  version: 47,
+  version: 48,
   registerSidebar,
   unregisterSidebar: removeSidebar,
   uiSettings: () => ({ ...uiSettings }),
