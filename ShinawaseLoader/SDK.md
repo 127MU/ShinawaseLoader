@@ -73,6 +73,16 @@ The Loader page has an Appearance section. Every option persists in `loader.conf
 
 HTTP surface:
 
+- `GET /api/market` returns the plugin market catalog (`ok`, `mods`, `recommended`, `tags`, `catalogUrl`, `updatedAt`), merged with locally installed versions (`installed`, `installedVersion`, `updateAvailable`, `status`). `?force=1` bypasses the short catalog cache. Catalog URL defaults to `https://echo.shiinasuki.com/mod-market/index.json` and can be overridden with `loader.config.json` `marketUrl` or `ECHO_MOD_MARKET_URL`.
+- `GET /api/market/search?q=&tag=` filters the current catalog.
+- `POST /api/market/install` with `{ id }` downloads the listing, verifies `sha256`, imports it, and enables it on first install.
+- Market APIs require an Echow4seHub account. The website uses the Flarum session cookie; the Loader stores a Flarum API token from `POST /api/market/login`.
+- `GET /api/market/me` returns the signed-in Hub user (`id`, `username`, `displayName`, `isAdmin`).
+- `POST /api/market/upload` publishes a `.echomod` as that user. Official ids stay locked unless the user is an admin.
+- `GET /api/market/mod/:id` returns listing plus `readme`, `intro`, stats, and `canManage`.
+- `POST /api/market/page` updates intro/README. Authors manage their own packages; admins can edit any.
+- `POST /api/market/unlist` with `{ id, unlisted }` hides or restores a package.
+- `POST /api/market/event` with `{ type: view|download|install, id }` records stats.
 - `GET /api/ui-settings` returns `{ ui, defaults }`.
 - `PUT /api/ui-settings` merges a partial `{ ui: { ... } }` (or a bare settings object), sanitizes it, persists it, and returns the result.
 - `GET /api/settings/export` returns a `shinawase-loader-settings` document with the full `loader.config.json` surface plus `locale` and `ui`. The Appearance section's Export button downloads it as JSON.

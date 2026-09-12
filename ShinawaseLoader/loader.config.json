@@ -16,6 +16,7 @@
   "nativeMemoryApi": true,
   "inspectPort": 9230,
   "autoUpdate": true,
+  "marketUrl": "https://echo.shiinasuki.com/mod-market/index.json",
   "locale": "zh",
   "ui": {
     "density": "comfortable",

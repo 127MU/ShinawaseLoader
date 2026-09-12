@@ -6,7 +6,7 @@
 
 *Community external ModLoader for ECHO Steam — local CDP injection, no built-in plugin VM.*
 
-![version](https://img.shields.io/badge/version-1.6.7-3b82f6?style=flat-square)
+![version](https://img.shields.io/badge/version-1.7.0-3b82f6?style=flat-square)
 ![platform](https://img.shields.io/badge/platform-Windows-0078D6?style=flat-square)
 ![node](https://img.shields.io/badge/node-22.23.2-339933?style=flat-square)
 ![mode](https://img.shields.io/badge/mode-external--CDP-8b5cf6?style=flat-square)
@@ -17,7 +17,7 @@
 
 ShinawaseLoader 是 ECHO Steam（当前验证 echo-steam **26.9.1**，Electron 43.3.0）的社区外部 ModLoader，**不使用 ECHO 内置插件 VM**。默认以本地 CDP 端口启动 ECHO，把启用的 Mod 注入主窗口渲染进程；HTML、CSS、JavaScript、WASM、侧栏页面与 `window.echo` 均可使用，且不修改 Steam 的 `ECHO.exe` / `app.asar`。Steam 更新后会自动把隔离运行时（`modded-runtime`）同步到新的 asar/exe。userData 为 `%APPDATA%\ECHO Steam`（可用 `ECHO_USER_DATA_PATH_OVERRIDE`）。
 
-> **v1.6.7**（当前）对齐 echo-steam 26.9.1。Loader 生成独立的 `ECHO.modded.exe`，**不取代** Steam 原版；安装结束后会指导把 Steam 启动项设为 `"…\ECHO.modded.exe" %command%`。双击该 exe 或 `start-echo-with-mods.cmd` 时会自动检查 GitHub 上的 Loader 与预装包并更新，Steam 更新后也会自动刷新隔离运行时。发现逻辑优先 `...\common\ECHO\ECHO.exe`，可用 `ECHO_ROOT` / `selection.json` / `--echo` 覆盖；Playtest 只能显式选择。自 **v1.6.0** 起提供注入 UI（Mods 管理页、配置弹窗、Loader 状态页）与 Mod 自定义配置页：清单声明 `"configUi": "config-ui.js"` 后，配置弹窗以 `echoConfigUi` 上下文执行该脚本；未提供或加载失败时自动回退到 `config.schema.json` 表单。详见 [`ShinawaseLoader/SDK.md`](ShinawaseLoader/SDK.md)。
+> **v1.7.0**（当前）对齐 echo-steam 26.9.1。Loader 生成独立的 `ECHO.modded.exe`，**不取代** Steam 原版；安装结束后会指导把 Steam 启动项设为 `"…\ECHO.modded.exe" %command%`。侧栏 Mods 下方提供 **Mod Market**，从 `echo.shiinasuki.com` 浏览并一键安装 / 更新社区插件。双击该 exe 或 `start-echo-with-mods.cmd` 时会自动检查 GitHub 上的 Loader 与预装包并更新，Steam 更新后也会自动刷新隔离运行时。发现逻辑优先 `...\common\ECHO\ECHO.exe`，可用 `ECHO_ROOT` / `selection.json` / `--echo` 覆盖；Playtest 只能显式选择。自 **v1.6.0** 起提供注入 UI（Mods 管理页、配置弹窗、Loader 状态页）与 Mod 自定义配置页：清单声明 `"configUi": "config-ui.js"` 后，配置弹窗以 `echoConfigUi` 上下文执行该脚本；未提供或加载失败时自动回退到 `config.schema.json` 表单。详见 [`ShinawaseLoader/SDK.md`](ShinawaseLoader/SDK.md)。
 
 ## 目录
 
@@ -37,6 +37,7 @@ ShinawaseLoader 是 ECHO Steam（当前验证 echo-steam **26.9.1**，Electron 4
 | 能力 | 说明 |
 | --- | --- |
 | **全新注入 UI** · v1.6.0 | 侧栏「Shinawase Loader」分组下提供 Mods 管理页、配置弹窗与 Loader 状态页（语言、调试、更新）。 |
+| **Mod Market** · v1.7.0 | 侧栏 Mods 下方「Mod Market」。从官方目录浏览、搜索、安装和更新 `.echomod`，样式与 Mods 页同一套主题。 |
 | **自定义配置页** · v1.6.0 | 清单字段 `configUi` 指向自定义脚本；失败时回退到 `config.schema.json` 自动渲染。 |
 | 渲染进程注入 | 默认 `external-cdp`：经 Chrome DevTools Protocol 注入，不改 `ECHO.exe`。 |
 | 主进程 bootstrap | Loader 启动 ECHO 时经 Node inspector（`--inspect`）加载 `streaming-bridge`、`native-host` 与额外 preload，不改写已安装的 `app.asar`。 |
@@ -98,10 +99,17 @@ Loader **不会取代** Steam 原版 `ECHO.exe` / `app.asar`。安装会在游�
 任选其一：
 
 1. 安装 Loader 时在 **可选包** 勾选 ECHO Streaming / ECHO MV（默认勾选），脚本会把对应 `.echomod` 导入游戏 `Mods`。
-2. 用 Loader 启动 ECHO 后，打开应用内 **Mods** 页，导入 `.echomod` / `.echo`（也支持拖放）。
-3. 把包文件丢进游戏目录的 `Mods` 或 `Plugins` 文件夹，渲染进程就绪后会注入已启用的包。
+2. 用 Loader 启动 ECHO 后，打开应用内侧栏 **Mod Market**，从官方目录一键安装或更新。
+3. 打开应用内 **Mods** 页，导入 `.echomod` / `.echo`（也支持拖放）。
+4. 把包文件丢进游戏目录的 `Mods` 或 `Plugins` 文件夹，渲染进程就绪后会注入已启用的包。
 
 成品预装包在 [`examples/packages/`](examples/packages/)。参考 Mod 在 [`examples/reference/`](examples/reference/)。`examples/` 源码目录不会被复制进安装位置，只有勾选的可选包会被导入。
+
+Mod Market 目录默认是 [`https://echo.shiinasuki.com/mod-market/`](https://echo.shiinasuki.com/mod-market/)。网页和 Loader 都提供搜索、推荐和上传。可用 `loader.config.json` 的 `marketUrl` 或环境变量 `ECHO_MOD_MARKET_URL` 覆盖目录地址。重新生成静态目录：
+
+```powershell
+node .\scripts\build-mod-market.mjs
+```
 
 ## 🛠️ Mod 开发
 

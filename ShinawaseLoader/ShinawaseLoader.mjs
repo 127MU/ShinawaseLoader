@@ -78,7 +78,8 @@ const readChoice = (items, hint) => new Promise((resolve) => {
 });
 
 const loaderDir = dirname(fileURLToPath(import.meta.url));
-const loaderVersion = '1.6.7';
+const loaderVersion = '1.7.0';
+const DEFAULT_MARKET_CATALOG_URL = 'https://echo.shiinasuki.com/mod-market/index.json';
 // Last verified Steam host. Do not treat FileVersion as an Electron ABI.
 // Isolated runtime tracks the installed asar/exe via runtime-sync.mjs.
 const alignedEchoProduct = 'echo-steam';
@@ -196,8 +197,16 @@ const loaderConfig = readJson(loaderConfigPath, {
   nativePort: 17863,
   nativeMemoryApi: true,
   autoUpdate: true,
+  marketUrl: DEFAULT_MARKET_CATALOG_URL,
   ui: { ...defaultUiSettings },
 });
+const marketCatalogUrl = String(process.env.ECHO_MOD_MARKET_URL || loaderConfig.marketUrl || DEFAULT_MARKET_CATALOG_URL).trim() || DEFAULT_MARKET_CATALOG_URL;
+let marketAuth = (loaderConfig.marketAuth && typeof loaderConfig.marketAuth === 'object') ? loaderConfig.marketAuth : null;
+const persistMarketAuth = (value) => {
+  marketAuth = value && typeof value === 'object' ? value : null;
+  writeJson(loaderConfigPath, { ...readJson(loaderConfigPath, loaderConfig), marketAuth });
+  return marketAuth;
+};
 
 let uiSettings = sanitizeUiSettings(loaderConfig.ui);
 const persistUiSettings = (patch) => {
@@ -205,6 +214,12 @@ const persistUiSettings = (patch) => {
   writeJson(loaderConfigPath, { ...readJson(loaderConfigPath, loaderConfig), ui: uiSettings });
   return uiSettings;
 };
+const persistAutoUpdate = (enabled) => {
+  const next = enabled !== false;
+  writeJson(loaderConfigPath, { ...readJson(loaderConfigPath, loaderConfig), autoUpdate: next });
+  return next;
+};
+const autoUpdateEnabled = () => readJson(loaderConfigPath, loaderConfig).autoUpdate !== false;
 
 const args = process.argv.slice(2);
 const command = args[0] && !args[0].startsWith('-') ? args.shift() : 'serve';
@@ -1582,7 +1597,7 @@ const injectEnabled = async () => {
       const targetState = probe?.result?.value;
       if (targetState?.ready !== true) continue;
       lastCycleReadyCount += 1;
-      const uiReloaded = targetState.uiVersion < 32;
+      const uiReloaded = targetState.uiVersion < 41;
       if (uiReloaded) await injectLoaderUi(session).catch((error) => log('WARN', `loader UI injection failed: ${error.message}`, error));
       if (targetState.playerVersion < 1) await injectPlayerRuntime(session).catch((error) => log('WARN', `player runtime injection failed: ${error.message}`, error));
       if (targetState.extendVersion < 1) await injectExtendRuntime(session).catch((error) => log('WARN', `extend runtime injection failed: ${error.message}`, error));
@@ -2138,7 +2153,225 @@ const runConsoleCommand = async (line) => {
     return modSummaries().map((item) => (item.enabled ? 'on ' : 'off') + '  ' + (item.name || item.id) + '  ' + (item.version || '')).join('\n') || '(none)';
   }
   if (cmd === 'locale') return String(locale || 'zh');
+  if (cmd === 'market') {
+    const list = await listMarket({ force: true });
+    if (!list.ok) return 'market error: ' + (list.error || 'offline');
+    return list.mods.map((item) => `${item.status.padEnd(10)}  ${item.name}  ${item.version}${item.installedVersion && item.installedVersion !== item.version ? '  local ' + item.installedVersion : ''}`).join('\n') || '(empty)';
+  }
   return 'unknown command: ' + cmd;
+};
+
+const compareModVersions = (left, right) => {
+  const parts = (value) => String(value || '0').split(/[^\d]+/u).map((part) => Number(part) || 0);
+  const a = parts(left);
+  const b = parts(right);
+  const len = Math.max(a.length, b.length);
+  for (let i = 0; i < len; i += 1) {
+    if ((a[i] || 0) > (b[i] || 0)) return 1;
+    if ((a[i] || 0) < (b[i] || 0)) return -1;
+  }
+  return 0;
+};
+const marketFetchBuffer = async (url, timeoutMs = 120000) => {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(url, {
+      signal: controller.signal,
+      headers: { 'user-agent': `ShinawaseLoader/${loaderVersion}`, accept: '*/*' },
+    });
+    if (!response.ok) throw new Error(`market_http_${response.status}`);
+    const bytes = Buffer.from(await response.arrayBuffer());
+    if (bytes.length > maxPackageBytes) throw new Error('echomod_too_large');
+    return bytes;
+  } finally { clearTimeout(timer); }
+};
+const resolveMarketAssetUrl = (value, catalogUrl = marketCatalogUrl) => {
+  const catalog = new URL(catalogUrl);
+  const target = new URL(String(value || ''), catalog);
+  if (!/^https?:$/u.test(target.protocol)) throw new Error('market_url_not_allowed');
+  if (target.username || target.password) throw new Error('market_url_not_allowed');
+  if (target.origin !== catalog.origin) throw new Error('market_url_not_allowed');
+  const rootPath = catalog.pathname.replace(/\/[^/]*$/u, '/');
+  if (!target.pathname.startsWith(rootPath)) throw new Error('market_url_not_allowed');
+  return target;
+};
+let marketCatalogCache = { at: 0, url: '', catalog: null };
+const MARKET_CATALOG_TTL_MS = 30 * 1000;
+const readMarketCatalog = async (options = {}) => {
+  const force = options.force === true;
+  const now = Date.now();
+  if (!force && marketCatalogCache.catalog && marketCatalogCache.url === marketCatalogUrl && now - marketCatalogCache.at < MARKET_CATALOG_TTL_MS) {
+    return marketCatalogCache.catalog;
+  }
+  const bytes = await marketFetchBuffer(marketCatalogUrl, 15000);
+  const catalog = JSON.parse(bytes.toString('utf8'));
+  if (!catalog || typeof catalog !== 'object' || !Array.isArray(catalog.mods)) throw new Error('market_catalog_invalid');
+  marketCatalogCache = { at: now, url: marketCatalogUrl, catalog };
+  return catalog;
+};
+const normalizeMarketListing = (raw) => {
+  if (!raw || typeof raw !== 'object') return null;
+  const id = String(raw.id || '').trim();
+  if (!safeId(id)) return null;
+  const file = String(raw.file || raw.url || '').trim();
+  if (!file) return null;
+  const sha = String(raw.sha256 || raw.sha || '').trim().toLowerCase();
+  if (!/^[a-f0-9]{64}$/u.test(sha)) return null;
+  const size = Number(raw.size) || 0;
+  if (size <= 0 || size > maxPackageBytes) return null;
+  const iconDataUrl = typeof raw.iconDataUrl === 'string' && raw.iconDataUrl.startsWith('data:') ? raw.iconDataUrl : null;
+  let iconUrl = null;
+  if (raw.icon) {
+    try { iconUrl = resolveMarketAssetUrl(raw.icon).href; } catch { iconUrl = null; }
+  }
+  return {
+    id,
+    name: String(raw.name || id),
+    nameZh: raw.nameZh ? String(raw.nameZh) : null,
+    version: String(raw.version || '1.0.0'),
+    description: String(raw.description || ''),
+    descriptionZh: raw.descriptionZh ? String(raw.descriptionZh) : null,
+    author: String(raw.author || ''),
+    authorId: raw.authorId ? String(raw.authorId) : '',
+    channel: raw.channel === 'official' ? 'official' : 'community',
+    featured: raw.featured === true,
+    unlisted: raw.unlisted === true,
+    canManage: raw.canManage === true,
+    tags: Array.isArray(raw.tags) ? raw.tags.map((tag) => String(tag)).filter(Boolean).slice(0, 8) : [],
+    minEchoVersion: raw.minEchoVersion ? String(raw.minEchoVersion) : null,
+    homepage: raw.homepage ? String(raw.homepage) : null,
+    file,
+    icon: raw.icon ? String(raw.icon) : null,
+    iconUrl,
+    iconDataUrl,
+    sha256: sha,
+    size,
+    downloads: Number(raw.downloads) || 0,
+    views: Number(raw.views) || 0,
+    installs: Number(raw.installs) || 0,
+    intro: raw.intro ? String(raw.intro) : '',
+    introZh: raw.introZh ? String(raw.introZh) : '',
+    hasReadme: raw.hasReadme === true,
+    uploadedAt: raw.uploadedAt ? String(raw.uploadedAt) : null,
+  };
+};
+const marketRecommendScore = (item, installedIds, installedTags) => {
+  if (installedIds.has(item.id) && item.updateAvailable !== true) return 0;
+  let score = 0;
+  if (item.featured) score += 48;
+  if (item.channel === 'official') score += 18;
+  if (item.updateAvailable) score += 36;
+  for (const tag of item.tags || []) if (installedTags.has(tag)) score += 14;
+  const downloads = Number(item.downloads) || 0;
+  if (downloads > 0) score += Math.min(24, Math.sqrt(downloads) * 2.2);
+  const uploaded = Date.parse(item.uploadedAt || '') || 0;
+  if (uploaded && Date.now() - uploaded < 14 * 86400000) score += 8;
+  return score;
+};
+const decorateMarketListing = (listing) => {
+  const record = findPackage(listing.id);
+  const installedVersion = record ? String(record.manifest?.version || '1.0.0') : null;
+  const enabled = readState().mods[listing.id]?.enabled === true;
+  const updateAvailable = Boolean(installedVersion && compareModVersions(listing.version, installedVersion) > 0);
+  const status = record && updateAvailable ? 'update' : record ? 'installed' : 'available';
+  return { ...listing, installed: Boolean(record), installedVersion, enabled, updateAvailable, status };
+};
+const listMarket = async (options = {}) => {
+  try {
+    let catalog;
+    if (marketAuth?.token) {
+      catalog = await marketApiCall('catalog');
+      if (!catalog || typeof catalog !== 'object' || !Array.isArray(catalog.mods)) throw new Error('market_catalog_invalid');
+    } else {
+      catalog = await readMarketCatalog(options);
+    }
+    const mods = catalog.mods.map(normalizeMarketListing).filter(Boolean).map(decorateMarketListing);
+    const installedIds = new Set(mods.filter((item) => item.installed).map((item) => item.id));
+    const installedTags = new Set(mods.filter((item) => item.installed).flatMap((item) => item.tags || []));
+    const recommended = mods
+      .filter((item) => !item.unlisted)
+      .map((item) => ({ item, score: marketRecommendScore(item, installedIds, installedTags) }))
+      .filter((row) => row.score > 0)
+      .sort((left, right) => right.score - left.score)
+      .slice(0, 4)
+      .map((row) => row.item);
+    const tags = [...new Set(mods.flatMap((item) => item.tags || []))];
+    return {
+      ok: true,
+      catalogUrl: marketCatalogUrl,
+      name: catalog.name || 'Mod Market',
+      updatedAt: catalog.updatedAt || null,
+      mods,
+      recommended,
+      tags,
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    log('WARN', `market catalog failed: ${message}`);
+    return { ok: false, catalogUrl: marketCatalogUrl, error: message, mods: [] };
+  }
+};
+const installMarketMod = async (id, options = {}) => {
+  if (!safeId(id)) throw new Error('invalid_mod_id');
+  const list = await listMarket({ force: options.refresh === true });
+  const listing = (list.mods || []).find((item) => item && item.id === id);
+  if (!listing) throw new Error('market_mod_not_found');
+  const fileUrl = resolveMarketAssetUrl(listing.file);
+  const bytes = await marketFetchBuffer(fileUrl.href, 120000);
+  const digest = createHash('sha256').update(bytes).digest('hex');
+  if (digest !== listing.sha256) throw new Error('market_checksum_mismatch');
+  const temp = join(logsRoot, `market-${listing.id}-${Date.now()}.echomod`);
+  mkdirSync(logsRoot, { recursive: true });
+  writeFileSync(temp, bytes);
+  try {
+    const existed = Boolean(findPackage(listing.id));
+    const previousEnabled = readState().mods[listing.id]?.enabled === true;
+    const manifest = importPackage(temp);
+    if (manifest.id !== listing.id) {
+      removeMod(manifest.id);
+      throw new Error('market_id_mismatch');
+    }
+    const enable = options.enable === false ? false : (existed ? previousEnabled : true);
+    if (enable) {
+      setEnabled(listing.id, true);
+      void requestInjection('market-install').catch((error) => log('WARN', `reinject after market install failed: ${error.message}`));
+    }
+    log('INFO', `market ${existed ? 'updated' : 'installed'} ${listing.id} v${manifest.version || listing.version}`);
+    void marketApiCall('event', { method: 'POST', body: { type: 'install', id: listing.id } }).catch((error) => log('DEBUG', `market event skipped: ${error.message}`));
+    return { ok: true, updated: existed, enabled: enable, manifest };
+  } finally {
+    rmSync(temp, { force: true });
+  }
+};
+const marketApiCall = async (path, options = {}) => {
+  const target = resolveMarketAssetUrl(new URL(String(path || '').replace(/^\//u, ''), new URL('api/', marketCatalogUrl)).href);
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), options.timeoutMs || 120000);
+  try {
+    const headers = { 'user-agent': `ShinawaseLoader/${loaderVersion}`, accept: 'application/json', 'content-type': 'application/json' };
+    if (marketAuth?.token) headers.authorization = 'Token ' + String(marketAuth.token);
+    const response = await fetch(target.href, {
+      method: options.method || 'GET',
+      headers,
+      body: options.body === undefined ? undefined : JSON.stringify(options.body),
+      signal: controller.signal,
+    });
+    const text = await response.text();
+    let value = {};
+    try { value = JSON.parse(text); } catch { value = { error: text.slice(0, 240) }; }
+    if (!response.ok || value?.ok === false) throw new Error(value?.error || `market_http_${response.status}`);
+    return value;
+  } finally { clearTimeout(timer); }
+};
+const uploadMarketMod = async (bytes, name) => {
+  const data = Buffer.isBuffer(bytes) ? bytes : Buffer.from(bytes || []);
+  if (!data.length) throw new Error('empty_package');
+  if (data.length > 32 * 1024 * 1024) throw new Error('echomod_too_large');
+  const result = await marketApiCall('upload', { method: 'POST', body: { data: data.toString('base64'), name: String(name || 'mod.echomod') } });
+  marketCatalogCache = { at: 0, url: '', catalog: null };
+  log('INFO', `market uploaded ${result.mod?.id || name} v${result.mod?.version || ''}`);
+  return result;
 };
 
 const server = createServer(async (request, response) => {
@@ -2179,6 +2412,8 @@ const server = createServer(async (request, response) => {
         ...(togetherRelay ? { togetherRelay } : {}),
         echo: discoverEchoes(echoExe || null),
         echoInstalls: discoverEchoes(echoExe || null).map(describeEchoInstall),
+        marketUrl: marketCatalogUrl,
+        autoUpdate: autoUpdateEnabled(),
       });
     }
     if (request.method === 'GET' && url.pathname === '/api/echoes') return jsonResponse(response, 200, { echoes: discoverEchoes() });
@@ -2232,6 +2467,12 @@ const server = createServer(async (request, response) => {
     }
     if (request.method === 'GET' && url.pathname === '/api/settings/export') {
       return jsonResponse(response, 200, { ok: true, ...exportLoaderSettings() });
+    }
+    if (request.method === 'POST' && url.pathname === '/api/settings/auto-update') {
+      const body = await readRequest(request);
+      const enabled = persistAutoUpdate(body.enabled !== false);
+      log('INFO', `auto-update ${enabled ? 'on' : 'off'}`);
+      return jsonResponse(response, 200, { ok: true, autoUpdate: enabled });
     }
     if (request.method === 'POST' && url.pathname === '/api/settings/import') {
       return jsonResponse(response, 200, importLoaderSettings(await readRequest(request)));
@@ -2293,6 +2534,74 @@ const server = createServer(async (request, response) => {
     if (request.method === 'GET' && url.pathname === '/api/mods') {
       const packages = modSummaries();
       return jsonResponse(response, 200, { mods: packages, plugins: packages.filter((item) => item.kind === 'plugin'), root, modsRoot, pluginsRoot });
+    }
+    if (request.method === 'GET' && url.pathname === '/api/market') {
+      return jsonResponse(response, 200, await listMarket({ force: url.searchParams.get('force') === '1' }));
+    }
+    if (request.method === 'POST' && url.pathname === '/api/market/install') {
+      const body = await readRequest(request);
+      return jsonResponse(response, 200, await installMarketMod(String(body.id || ''), { enable: body.enable, refresh: true }));
+    }
+    if (request.method === 'POST' && url.pathname === '/api/market/upload') {
+      const body = await readRequest(request);
+      return jsonResponse(response, 200, await uploadMarketMod(Buffer.from(String(body.data || ''), 'base64'), body.name));
+    }
+    if (request.method === 'POST' && url.pathname === '/api/market/login') {
+      const body = await readRequest(request);
+      const result = await marketApiCall('login', { method: 'POST', body: { identification: body.identification || body.username, password: body.password } });
+      persistMarketAuth({ token: result.token, user: result.user });
+      return jsonResponse(response, 200, { ok: true, user: result.user });
+    }
+    if (request.method === 'POST' && url.pathname === '/api/market/logout') {
+      persistMarketAuth(null);
+      return jsonResponse(response, 200, { ok: true });
+    }
+    if (request.method === 'GET' && url.pathname === '/api/market/me') {
+      if (!marketAuth?.token) return jsonResponse(response, 200, { ok: true, user: null });
+      try {
+        const result = await marketApiCall('me');
+        if (result.user) persistMarketAuth({ ...marketAuth, user: result.user });
+        return jsonResponse(response, 200, { ok: true, user: result.user || null });
+      } catch {
+        persistMarketAuth(null);
+        return jsonResponse(response, 200, { ok: true, user: null });
+      }
+    }
+    if (request.method === 'POST' && url.pathname === '/api/market/unlist') {
+      const body = await readRequest(request);
+      marketCatalogCache = { at: 0, url: '', catalog: null };
+      return jsonResponse(response, 200, await marketApiCall(body.unlisted === false ? 'relist' : 'unlist', { method: 'POST', body: { id: body.id } }));
+    }
+    if (request.method === 'POST' && url.pathname === '/api/market/delete') {
+      const body = await readRequest(request);
+      marketCatalogCache = { at: 0, url: '', catalog: null };
+      return jsonResponse(response, 200, await marketApiCall('delete', { method: 'POST', body: { id: body.id } }));
+    }
+    const marketModMatch = url.pathname.match(/^\/api\/market\/mod\/([^/]+)$/u);
+    if (marketModMatch && request.method === 'GET') {
+      const id = decodeURIComponent(marketModMatch[1]);
+      return jsonResponse(response, 200, await marketApiCall('mod/' + encodeURIComponent(id)));
+    }
+    if (request.method === 'POST' && url.pathname === '/api/market/page') {
+      const body = await readRequest(request);
+      marketCatalogCache = { at: 0, url: '', catalog: null };
+      return jsonResponse(response, 200, await marketApiCall('page', { method: 'POST', body }));
+    }
+    if (request.method === 'POST' && url.pathname === '/api/market/event') {
+      const body = await readRequest(request);
+      return jsonResponse(response, 200, await marketApiCall('event', { method: 'POST', body: { type: body.type || 'view', id: body.id } }));
+    }
+    if (request.method === 'GET' && url.pathname === '/api/market/search') {
+      const list = await listMarket();
+      const query = String(url.searchParams.get('q') || '');
+      const tag = String(url.searchParams.get('tag') || '');
+      const mods = (list.mods || []).filter((item) => {
+        const hay = [item.name, item.nameZh, item.id, item.description, item.descriptionZh, item.author, ...(item.tags || [])].join(' ').toLowerCase();
+        if (query && !hay.toLowerCase().includes(query.toLowerCase())) return false;
+        if (tag && !(item.tags || []).includes(tag)) return false;
+        return true;
+      });
+      return jsonResponse(response, 200, { ok: list.ok, query, tag, mods });
     }
     const fileMatch = url.pathname.match(/^\/api\/mod\/([^/]+)\/file\/(.+)$/u);
     if (fileMatch && request.method === 'GET') {

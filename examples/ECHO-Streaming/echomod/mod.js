@@ -5252,6 +5252,7 @@ accountsSidebarUnsubscribe = external.sidebar.register({
   label: accountText('流媒体账号', 'Streaming accounts'),
   icon: '👤',
   order: streamingSidebarOrder + 1,
+  hidden: config.showAccountsSidebar === false,
   render(root) {
     accountRoot = root;
     accountDisposed = false;

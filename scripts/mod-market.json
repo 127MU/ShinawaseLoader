@@ -1,0 +1,42 @@
+{
+  "name": "Shinawase Mod Market",
+  "channel": "https://echo.shiinasuki.com/mod-market/",
+  "mods": [
+    {
+      "id": "echo.community-streaming",
+      "package": "examples/packages/ECHO-Streaming.echomod",
+      "source": "examples/ECHO-Streaming/echomod",
+      "channel": "official",
+      "featured": true,
+      "author": "Shinawase",
+      "tags": ["streaming"],
+      "nameZh": "ECHO Streaming",
+      "descriptionZh": "社区流媒体：网易云评论与日推、相似歌曲连播、灰色歌曲解锁、歌手专辑，以及官方风格的一起听。",
+      "descriptionEn": "Community streaming: NetEase comments and dailies, similar-track autoplay, grey-track unblock, artist albums, and official-style listen-together."
+    },
+    {
+      "id": "echo.mv",
+      "package": "examples/packages/ECHO-MV.echomod",
+      "source": "examples/ECHO-MV/echomod",
+      "channel": "official",
+      "featured": true,
+      "author": "Shinawase",
+      "tags": ["video"],
+      "nameZh": "ECHO MV",
+      "descriptionZh": "恢复隐藏的 MV：自动搜索并尽量套用匹配视频，播放条入口加上歌词页抽屉设置。",
+      "descriptionEn": "Restores hidden MV: auto-search and apply a matching video, with a player-bar entry and lyrics-page settings drawer."
+    },
+    {
+      "id": "echo.lyrics-match-whitebox",
+      "package": "examples/packages/ECHO-LyricsMatchWhitebox.echomod",
+      "source": "examples/ECHO-LyricsMatchWhitebox/echomod",
+      "channel": "official",
+      "featured": true,
+      "author": "Shinawase",
+      "tags": ["lyrics"],
+      "nameZh": "ECHO 歌词匹配白盒",
+      "descriptionZh": "用官方标题栏「歌词设置」拉开抽屉做匹配；不再弹出挡住歌词的浮层，也不再注入角落圆图标。",
+      "descriptionEn": "Match lyrics from the official title-bar Lyrics settings drawer. No overlay that covers lyrics, and no extra corner icon."
+    }
+  ]
+}

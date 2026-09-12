@@ -30,3 +30,5 @@ Packages/template-self-test.echomod
 /examples/reference/ECHO-AudioBand/echomod/host/
 /examples/reference/ECHO-AudioBand/winui/bin/
 /examples/reference/ECHO-AudioBand/winui/obj/
+/scripts/mod-market-web/echo-pearl.mp3
+.grok/

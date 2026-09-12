@@ -13,5 +13,7 @@
   "similarAutoPlay": true,
   "similarCount": 10,
   "artistStreamingAlbumsEnabled": true,
-  "artistStreamingAlbumsProvider": "netease"
+  "artistStreamingAlbumsProvider": "netease",
+  "showAccountsSidebar": true,
+  "showTogetherTray": false
 }

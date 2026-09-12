@@ -288,7 +288,12 @@ const isDirectBili = (video, target) => {
   const id = biliIdFromTarget(target);
   return Boolean(id && video.sourceId === id);
 };
-const shouldFollowMusic = (settings, video, target) => settings.restartAudioOnLoad === true || isDirectBili(video, target);
+const shouldFollowMusic = (settings, video, target) => {
+  if (!video || isEchoLive(video)) return false;
+  if (settings.restartAudioOnLoad === true || isDirectBili(video, target)) return true;
+  // In-app MV is always muted; lock picture to ECHO audio or it drifts after the first seek.
+  return Boolean(video.playableInApp && video.mediaUrl);
+};
 const videoToCandidate = (video) => ({
   id: video.id,
   provider: video.provider,
@@ -659,6 +664,13 @@ const isLyricsPageVisible = () => {
   const rect = page.getBoundingClientRect();
   return rect.width > 1 && rect.height > 1;
 };
+const waitForLyricsPage = async (tries = 40) => {
+  for (let attempt = 0; attempt < tries; attempt += 1) {
+    if (isLyricsPageVisible()) return true;
+    await new Promise((resolve) => window.setTimeout(resolve, 50));
+  }
+  return isLyricsPageVisible();
+};
 const lyricsPageEl = () => document.querySelector('.lyrics-page');
 const isDrawerDomOpen = () => Boolean(refs.drawerRoot?.isConnected && state.drawerOpen && state.drawerRender);
 const hideOfficialMvChrome = (page) => {
@@ -820,7 +832,16 @@ const loadSelected = async (options = {}) => {
     }
     const effectiveId = snapshotTrackIdFor(state.currentTrack, state.trackId) || state.trackId;
     let video = await mvApi.getSelected(effectiveId);
-    if (state.streamingTarget) {
+    const canReuseSelected = Boolean(
+      video
+      && (
+        video.selectionOrigin === 'manual'
+        || video.sourceType === 'manual'
+        || (video.playableInApp && video.mediaUrl)
+        || youtubeEmbedUrl(video, {})
+      )
+    );
+    if (state.streamingTarget && !canReuseSelected) {
       const biliId = biliIdFromTarget(state.streamingTarget);
       const rawBili = String(state.streamingTarget.providerTrackId || '').trim();
       const biliUrl = state.streamingTarget.provider === 'bilibili'
@@ -828,10 +849,10 @@ const loadSelected = async (options = {}) => {
         : null;
       const ytId = state.streamingTarget.provider === 'youtube' ? youtubeIdFromValue(state.streamingTarget.providerTrackId) : null;
       const ytUrl = ytId ? `https://www.youtube.com/watch?v=${ytId}` : null;
-      if (biliUrl && (!video || video.provider !== 'bilibili' || video.sourceId !== biliId)) {
+      if (biliUrl) {
         try { video = await mvApi.bindUrl(effectiveId, biliUrl); } catch {}
       }
-      if (ytUrl && (!video || video.provider !== 'youtube' || video.sourceId !== ytId)) {
+      if (ytUrl && (!video || video.provider !== 'youtube')) {
         try { video = await mvApi.bindUrl(effectiveId, ytUrl); } catch {}
       }
     }
@@ -2094,13 +2115,15 @@ const onMvButtonClick = (event) => {
   const now = performance.now();
   if (now - lastEntryToggleAt < 250) return;
   lastEntryToggleAt = now;
-  if (!isLyricsPageVisible()) {
+  const needLyrics = !isLyricsPageVisible();
+  if (needLyrics) {
     window.dispatchEvent(new CustomEvent(NAV_LYRICS_EVENT, { detail: { mode: 'lyrics' } }));
   }
   void (async () => {
     if (state.settings.enabled === false) {
       await patchSettings({ enabled: true });
     }
+    if (needLyrics) await waitForLyricsPage();
     void loadSelected();
   })();
 };
@@ -2244,6 +2267,12 @@ const onNavigateLyrics = (event) => {
   applyPageFlags();
   if (mode === 'mv' || isLyricsPageVisible()) {
     if (panelActive() || shouldAutoSearch()) void loadSelected({ preserveCurrent: true });
+    return;
+  }
+  if (mode === 'lyrics' && (panelActive() || shouldAutoSearch())) {
+    void waitForLyricsPage().then((ok) => {
+      if (ok && (panelActive() || shouldAutoSearch())) void loadSelected({ preserveCurrent: true });
+    });
   }
 };
 
@@ -2260,12 +2289,18 @@ const startTimers = () => {
 };
 
 const observeDom = () => {
+  let lyricsWasVisible = isLyricsPageVisible();
   const scan = () => {
     const lyricsButton = document.querySelector('button.transport-lyrics-button');
     if (lyricsButton) mountTransportButton(lyricsButton);
     mountSettingsButton();
     applyPageFlags();
-    if (!isLyricsPageVisible()) return;
+    const visible = isLyricsPageVisible();
+    if (visible && !lyricsWasVisible && (panelActive() || shouldAutoSearch())) {
+      void loadSelected({ preserveCurrent: true });
+    }
+    lyricsWasVisible = visible;
+    if (!visible) return;
     if (ownedPanelEl()) ownedPanelEl().remove();
     if (panelActive() && !refs.background) renderPanel();
   };

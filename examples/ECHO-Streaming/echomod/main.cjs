@@ -1827,7 +1827,7 @@ const togetherServerRoom = (body) => {
   };
 };
 
-const createTogetherService = ({ log, broadcast, electron }) => {
+const createTogetherService = ({ log, broadcast, electron, showTray }) => {
   const state = {
     loggedIn: false,
     loginError: null,
@@ -2937,7 +2937,7 @@ const createTogetherService = ({ log, broadcast, electron }) => {
   };
 
   const start = () => {
-    ensureTray();
+    if (showTray === true) ensureTray();
     void pollStatus();
     statusTimer = setInterval(() => { void pollStatus(); }, 8000);
     heartbeatTimer = setInterval(() => { void heartbeat(); }, 5000);
@@ -3135,6 +3135,7 @@ const activate = (host) => {
     log: (level, message) => { try { host.log(level, message); } catch {} },
     broadcast: (name, payload) => { try { host.broadcast(name, payload); } catch {} },
     electron: host.electron || electronRuntime,
+    showTray: host.config?.showTogetherTray === true,
   });
   together.start();
 

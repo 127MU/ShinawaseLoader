@@ -1,0 +1,16 @@
+[Unit]
+Description=Shinawase Mod Market API
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/1panel/apps/openresty/openresty/www/sites/echo.shiinasuki.com/mod-market
+Environment=MARKET_ROOT=/opt/1panel/apps/openresty/openresty/www/sites/echo.shiinasuki.com/mod-market
+Environment=MARKET_PORT=17891
+ExecStart=/usr/bin/python3 /opt/1panel/apps/openresty/openresty/www/sites/echo.shiinasuki.com/mod-market/mod-market-server.py
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Mod 市场 · Echow4seHub</title>
+  <meta name="description" content="Echow4seHub Mod 市场：搜索、推荐、上传 ShinawaseLoader 插件">
+  <meta name="theme-color" content="#1e2a66">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&family=Noto+Sans+SC:wght@400;500;700;900&family=Outfit:wght@400;500;600;700;800&display=swap">
+  <link rel="stylesheet" href="./market.css">
+  <link rel="stylesheet" href="./echo-hub-fx.css">
+  <link rel="stylesheet" href="./echo-hub-fx-dark.css" media="(prefers-color-scheme: dark)">
+</head>
+<body>
+  <header class="hub-bar">
+    <div class="hub-bar-inner">
+      <a class="hub-title" href="https://echo.shiinasuki.com/">Echow4seHub</a>
+      <nav class="hub-nav">
+        <a href="https://echo.shiinasuki.com/">论坛</a>
+        <a data-nav-market class="is-here" href="/mod-market/">Mod 市场</a>
+        <a data-nav-manage hidden href="#manage">管理</a>
+        <span class="hub-user" data-user hidden></span>
+      </nav>
+    </div>
+  </header>
+  <div class="gate" data-gate>
+    <div class="kicker">ACCOUNT</div>
+    <h1>请先登录</h1>
+    <p class="lead">Mod 市场只对 Echow4seHub 注册账号开放。登录后才能浏览、下载、上传和管理插件。</p>
+    <a class="get" href="https://echo.shiinasuki.com/">登录 / 注册</a>
+  </div>
+  <main data-app hidden>
+    <div class="kicker">CHANNELS · MARKET</div>
+    <h1>Mod 市场</h1>
+    <p class="lead">Echow4seHub 的插件目录。搜索、看推荐、读介绍，或把 <code>.echomod</code> 上传上来。ECHO 里侧栏同样有入口。</p>
+    <div class="drop" data-drop>
+      <span>拖入 .echomod 发布到市场，或点击选择文件</span>
+      <input type="file" accept=".echomod,.echo" hidden data-file>
+    </div>
+    <div class="toolbar">
+      <div class="search">
+        <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><circle cx="11" cy="11" r="6.4"/><path d="m16.3 16.3 4.2 4.2"/></svg>
+        <input type="search" data-search placeholder="搜索插件、作者或标签" autocomplete="off">
+        <button class="search-clear" type="button" data-search-clear hidden>×</button>
+        <div class="suggest" data-suggest hidden></div>
+      </div>
+      <div class="filters" data-tags></div>
+    </div>
+    <section data-recommend-wrap>
+      <div class="kicker-row">
+        <span class="kicker">推荐</span>
+      </div>
+      <div data-recommend></div>
+    </section>
+    <section>
+      <div class="kicker-row">
+        <span class="kicker">全部</span>
+        <span class="badge" data-count>0</span>
+      </div>
+      <div data-list></div>
+    </section>
+    <footer data-footer></footer>
+  </main>
+  <main data-manage hidden>
+    <div class="manage-head">
+      <div>
+        <div class="kicker">MANAGE</div>
+        <h1>插件管理</h1>
+        <p class="lead">点「编辑」改介绍和 README，下架或删除单独操作。介绍弹窗只负责展示。</p>
+      </div>
+      <a class="btn ghost" href="/mod-market/" data-manage-back>返回市场</a>
+    </div>
+    <div data-manage-list></div>
+  </main>
+  <div class="toast-stack" data-toasts></div>
+  <div class="overlay" data-overlay hidden></div>
+  <script src="./echo-hub-fx.js"></script>
+  <script src="./market.js"></script>
+</body>
+</html>
