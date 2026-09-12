@@ -5310,11 +5310,11 @@ const installListeners = () => { if (downloadApi()?.onJobsUpdated) downloadUnsub
 
 const stopAccountQrPolling = () => { window.clearTimeout(accountQrTimer); accountQrTimer = 0; state.accountQr = null; removeNeteaseQrBackdrop(); };
 const streamingSidebarOrder = Number(manifest.sidebarOrder) || 40;
-const disposeSidebar = external.sidebar.register({ id: 'main', label: manifest.name || copy.streaming, icon: '♫', order: streamingSidebarOrder, render(root) { pageRoot = root; disposed = false; installListeners(); render(); void loadInitial(); return () => { disposed = true; window.clearTimeout(searchTimer); window.clearInterval(statusTimer); resetSearchInput(); cancelPlaybackPrepare(); closeStreamMenu(); closePlaylistDownloadDialog(); accountUnsubscribe?.(); downloadUnsubscribe?.(); accountUnsubscribe = null; downloadUnsubscribe = null; pageRoot = null; }; } });
+const disposeSidebar = external.sidebar.register({ id: 'main', label: copy.streamingTitle || copy.streaming, icon: '♫', order: streamingSidebarOrder, render(root) { pageRoot = root; disposed = false; installListeners(); render(); void loadInitial(); return () => { disposed = true; window.clearTimeout(searchTimer); window.clearInterval(statusTimer); resetSearchInput(); cancelPlaybackPrepare(); closeStreamMenu(); closePlaylistDownloadDialog(); accountUnsubscribe?.(); downloadUnsubscribe?.(); accountUnsubscribe = null; downloadUnsubscribe = null; pageRoot = null; }; } });
 accountsSidebarUnsubscribe = external.sidebar.register({
   id: 'accounts',
   label: accountText('流媒体账号', 'Streaming accounts'),
-  icon: '👤',
+  icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.55" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="3.25"/><path d="M5.4 19.2c.9-3.15 3.35-4.95 6.6-4.95s5.7 1.8 6.6 4.95"/></svg>',
   order: streamingSidebarOrder + 1,
   hidden: config.showAccountsSidebar === false,
   render(root) {

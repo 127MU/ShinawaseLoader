@@ -1,6 +1,6 @@
-// Loader UI generation 46. Keep this guard in sync with
-// window.__echoExternalLoaderUi.version and ShinawaseLoader.mjs (uiVersion < 46).
-if (window.__echoExternalLoaderUi?.version >= 46) return 'already';
+// Loader UI generation 47. Keep this guard in sync with
+// window.__echoExternalLoaderUi.version and ShinawaseLoader.mjs (uiVersion < 47).
+if (window.__echoExternalLoaderUi?.version >= 47) return 'already';
 window.__echoExternalLoaderUi?.dispose?.();
 
 const base = 'http://127.0.0.1:' + LOADER_PORT;
@@ -3603,7 +3603,10 @@ const renderSidebarButtons = () => {
       }, true);
       sidebarButtons.set(entry.id, button);
     }
-    button.querySelector('.nav-icon-shell').textContent = entry.icon || '◇';
+    const iconShell = button.querySelector('.nav-icon-shell');
+    const icon = entry.icon || '◇';
+    if (typeof icon === 'string' && icon.includes('<svg')) iconShell.innerHTML = icon;
+    else iconShell.textContent = icon;
     button.querySelector('.nav-item-label').textContent = entry.label || entry.id;
     button.setAttribute('aria-label', entry.label || entry.id);
     button.title = entry.label || entry.id;
@@ -3857,7 +3860,7 @@ document.addEventListener('click', (event) => {
 }, true);
 
 window.__echoExternalLoaderUi = {
-  version: 46,
+  version: 47,
   registerSidebar,
   unregisterSidebar: removeSidebar,
   uiSettings: () => ({ ...uiSettings }),
