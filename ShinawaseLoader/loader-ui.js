@@ -1,6 +1,6 @@
-// Loader UI generation 43. Keep this guard in sync with
-// window.__echoExternalLoaderUi.version and ShinawaseLoader.mjs (uiVersion < 43).
-if (window.__echoExternalLoaderUi?.version >= 43) return 'already';
+// Loader UI generation 44. Keep this guard in sync with
+// window.__echoExternalLoaderUi.version and ShinawaseLoader.mjs (uiVersion < 44).
+if (window.__echoExternalLoaderUi?.version >= 44) return 'already';
 window.__echoExternalLoaderUi?.dispose?.();
 
 const base = 'http://127.0.0.1:' + LOADER_PORT;
@@ -139,7 +139,6 @@ css.textContent = `
     font-family: var(--shl-font);
   }
   .echo-external-mod-panel[hidden], .echo-external-loader-panel[hidden], .echo-external-mod-page[hidden] { display: none !important; }
-  [data-echo-external-sidebar].echo-sidebar-hidden { display: none !important; }
   .echo-external-mod-page {
     grid-row: 2; grid-column: 2; min-width: 0; min-height: 0; overflow: auto;
     background: var(--theme-page-bg, var(--color-bg, #f6f6f7));
@@ -693,11 +692,6 @@ css.textContent = `
   .echo-empty-hint { margin: 0; max-width: 44ch; font-size: 13px; line-height: 1.55; }
 
   /* ---- Sidebar nav ---- */
-  [data-echo-external-loader-group] {
-    contain: none !important;
-    content-visibility: visible !important;
-    overflow: visible !important;
-  }
   [data-echo-external-loader-group] .nav-icon-shell { display: grid; place-items: center; }
   [data-echo-external-loader-group] .nav-icon-shell svg { width: 21px; height: 21px; display: block; }
   /* Many registered mods outgrow the sidebar. Keep an internal scrollport so
@@ -739,7 +733,7 @@ css.textContent = `
     flex-direction: column;
     min-height: auto;
     margin-top: auto; /* pin Loader + utility to the bottom when space allows */
-    overflow: visible;
+    overflow: hidden;
   }
   .sidebar-groups > [data-echo-external-loader-group] .nav-list {
     display: flex;
@@ -758,7 +752,7 @@ css.textContent = `
     flex-direction: column;
     min-height: auto;
     margin-top: 14px;
-    overflow: visible;
+    overflow: hidden;
   }
   .sidebar > [data-echo-external-loader-group] .sidebar-group-label {
     margin: 0 0 6px; padding: 0 12px; font-size: 10.5px; font-weight: 680;
@@ -1720,8 +1714,7 @@ const ensureLoaderGroup = () => {
     group.append(heading, nav);
   } else {
     const heading = group.querySelector('.sidebar-group-label');
-    const label = T.loaderGroup || 'Shinawase Loader';
-    if (heading && heading.textContent !== label) heading.textContent = label;
+    if (heading) heading.textContent = T.loaderGroup || 'Shinawase Loader';
   }
   if (groups) {
     // Keep utility (Settings) pinned below us — never append after it or the
@@ -1748,12 +1741,9 @@ const ensureLoaderButtons = (nav) => {
   loaderButton = makeNavButton(nav, 'loader', T.loader, loaderNavIcon, openLoader);
   modsButton = makeNavButton(nav, 'mods', T.mods, modsNavIcon, openMods);
   marketButton = makeNavButton(nav, 'market', T.market || 'Mod Market', marketNavIcon, openMarket);
-  const desired = [loaderButton, modsButton, marketButton];
-  for (let i = 0; i < desired.length; i += 1) {
-    const button = desired[i];
-    const before = desired[i + 1] || nav.querySelector('[data-echo-external-sidebar]') || null;
-    if (button.parentElement !== nav || button.nextElementSibling !== before) nav.insertBefore(button, before);
-  }
+  if (marketButton.parentElement !== nav) nav.append(marketButton);
+  if (modsButton.parentElement !== nav || modsButton.nextElementSibling !== marketButton) nav.insertBefore(modsButton, marketButton);
+  if (loaderButton.parentElement !== nav || loaderButton.nextElementSibling !== modsButton) nav.insertBefore(loaderButton, modsButton);
   return modsButton;
 };
 
@@ -3543,14 +3533,25 @@ const removeSidebar = (id) => {
   if (activeSidebar === id) closeSidebarPage();
 };
 
+const hiddenSidebarStash = () => {
+  let stash = document.getElementById('echo-hidden-sidebar-stash');
+  if (!stash) {
+    stash = document.createElement('div');
+    stash.id = 'echo-hidden-sidebar-stash';
+    stash.hidden = true;
+    stash.style.display = 'none';
+    document.body.append(stash);
+  }
+  return stash;
+};
+
 const renderSidebarButtons = () => {
   const nav = ensureLoaderGroup();
   if (!nav) return false;
   ensureLoaderButtons(nav);
   for (const [id, button] of sidebarButtons) if (!sidebarEntries.has(id)) { button.remove(); sidebarButtons.delete(id); }
   const entries = [...sidebarEntries.values()].sort((left, right) => (Number(left.order) || 0) - (Number(right.order) || 0) || String(left.label || '').localeCompare(String(right.label || '')));
-  const visible = [];
-  const hidden = [];
+  let anchor = marketButton?.nextElementSibling || modsButton?.nextElementSibling || null;
   for (const entry of entries) {
     let button = sidebarButtons.get(entry.id);
     if (!button || !button.isConnected) {
@@ -3567,25 +3568,16 @@ const renderSidebarButtons = () => {
       }, true);
       sidebarButtons.set(entry.id, button);
     }
-    const icon = entry.icon || '◇';
-    const label = entry.label || entry.id;
-    const iconShell = button.querySelector('.nav-icon-shell');
-    const labelNode = button.querySelector('.nav-item-label');
-    if (iconShell && iconShell.textContent !== icon) iconShell.textContent = icon;
-    if (labelNode && labelNode.textContent !== label) labelNode.textContent = label;
-    if (button.getAttribute('aria-label') !== label) button.setAttribute('aria-label', label);
-    if (button.title !== label) button.title = label;
-    button.classList.toggle('echo-sidebar-hidden', entry.hidden === true);
-    if (entry.hidden) button.setAttribute('aria-hidden', 'true');
-    else button.removeAttribute('aria-hidden');
-    (entry.hidden ? hidden : visible).push(button);
-  }
-  let prev = marketButton || modsButton || loaderButton;
-  for (const button of [...visible, ...hidden]) {
-    if (button.parentElement !== nav || prev?.nextElementSibling !== button) {
-      nav.insertBefore(button, prev ? prev.nextSibling : null);
+    button.querySelector('.nav-icon-shell').textContent = entry.icon || '◇';
+    button.querySelector('.nav-item-label').textContent = entry.label || entry.id;
+    button.setAttribute('aria-label', entry.label || entry.id);
+    button.title = entry.label || entry.id;
+    if (entry.hidden) {
+      hiddenSidebarStash().append(button);
+      continue;
     }
-    prev = button;
+    if (button !== anchor) nav.insertBefore(button, anchor);
+    anchor = button.nextElementSibling;
   }
   return true;
 };
@@ -3781,8 +3773,6 @@ const maybeShowDisclaimer = () => {
   showDisclaimerOverlay();
 };
 
-const railReady = () => Boolean(loaderGroup?.isConnected && loaderButton?.isConnected && modsButton?.isConnected && marketButton?.isConnected);
-
 const ensure = () => {
   if (splashActive()) return false;
   ensureLegacyThemeVars();
@@ -3800,18 +3790,17 @@ const ensure = () => {
 };
 
 let ensureTimer = 0;
-const observeTarget = () => document.querySelector('.sidebar-groups') || document.querySelector('aside.sidebar') || document.querySelector('.sidebar') || document.body;
+const observeTarget = () => document.querySelector('.sidebar') || document.querySelector('.sidebar-groups') || document.body;
 const scheduleEnsure = () => {
   if (ensureTimer) return;
   ensureTimer = window.setTimeout(() => {
     ensureTimer = 0;
-    if (railReady()) return;
     observer.disconnect();
     try { ensure(); } finally {
       const root = observeTarget();
-      if (root) observer.observe(root, { childList: true, subtree: false });
+      if (root) observer.observe(root, { childList: true, subtree: true });
     }
-  }, 400);
+  }, 250);
 };
 
 const observer = new MutationObserver(scheduleEnsure);
@@ -3821,14 +3810,10 @@ const startObserver = () => {
     return;
   }
   const root = observeTarget();
-  if (root) observer.observe(root, { childList: true, subtree: false });
+  if (root) observer.observe(root, { childList: true, subtree: true });
   ensure();
 };
 startObserver();
-const railWatch = window.setInterval(() => {
-  if (splashActive()) return;
-  if (!railReady()) scheduleEnsure();
-}, 2000);
 document.addEventListener('click', (event) => {
   const navItem = event.target?.closest?.('.nav-item');
   if (!navItem) return;
@@ -3837,14 +3822,13 @@ document.addEventListener('click', (event) => {
 }, true);
 
 window.__echoExternalLoaderUi = {
-  version: 43,
+  version: 44,
   registerSidebar,
   unregisterSidebar: removeSidebar,
   uiSettings: () => ({ ...uiSettings }),
   setUiSettings: (patch) => saveUiSettings(patch),
   dispose: () => {
     observer.disconnect();
-    window.clearInterval(railWatch);
     window.clearTimeout(ensureTimer);
     window.clearTimeout(configModalTimer);
     window.clearTimeout(searchTimer);
@@ -3869,6 +3853,7 @@ window.__echoExternalLoaderUi = {
     motionCss.remove();
     legacyThemeBridge?.remove();
     loaderGroup?.remove();
+    document.getElementById('echo-hidden-sidebar-stash')?.remove();
     sidebarEntries.forEach((entry) => { try { entry.cleanup?.(); } catch {} });
     sidebarButtons.forEach((button) => button.remove());
     sidebarPages.forEach((page) => page.remove());
