@@ -1,6 +1,6 @@
-// Loader UI generation 44. Keep this guard in sync with
-// window.__echoExternalLoaderUi.version and ShinawaseLoader.mjs (uiVersion < 44).
-if (window.__echoExternalLoaderUi?.version >= 44) return 'already';
+// Loader UI generation 45. Keep this guard in sync with
+// window.__echoExternalLoaderUi.version and ShinawaseLoader.mjs (uiVersion < 45).
+if (window.__echoExternalLoaderUi?.version >= 45) return 'already';
 window.__echoExternalLoaderUi?.dispose?.();
 
 const base = 'http://127.0.0.1:' + LOADER_PORT;
@@ -800,13 +800,11 @@ css.textContent = `
       overflow: visible;
     }
     .sidebar > [data-echo-external-loader-group] {
-      flex-direction: row;
+      flex-direction: column;
       margin-top: 0;
-      align-items: center;
+      align-items: stretch;
     }
-    .sidebar > [data-echo-external-loader-group] .sidebar-group-label,
-    .sidebar-groups > [data-echo-external-loader-group] .sidebar-group-label { display: none; }
-    .sidebar > [data-echo-external-loader-group] .nav-list { flex-direction: row; min-width: max-content; }
+    .sidebar > [data-echo-external-loader-group] .nav-list { flex-direction: column; min-width: 0; }
     .sidebar:has(> [data-echo-external-loader-group]) > .sidebar-spacer { display: none; }
   }
 
@@ -1739,11 +1737,11 @@ const ensureLoaderGroup = () => {
 const ensureLoaderButtons = (nav) => {
   if (!nav) return null;
   loaderButton = makeNavButton(nav, 'loader', T.loader, loaderNavIcon, openLoader);
-  modsButton = makeNavButton(nav, 'mods', T.mods, modsNavIcon, openMods);
   marketButton = makeNavButton(nav, 'market', T.market || 'Mod Market', marketNavIcon, openMarket);
-  if (marketButton.parentElement !== nav) nav.append(marketButton);
-  if (modsButton.parentElement !== nav || modsButton.nextElementSibling !== marketButton) nav.insertBefore(modsButton, marketButton);
-  if (loaderButton.parentElement !== nav || loaderButton.nextElementSibling !== modsButton) nav.insertBefore(loaderButton, modsButton);
+  modsButton = makeNavButton(nav, 'mods', T.mods, modsNavIcon, openMods);
+  if (modsButton.parentElement !== nav) nav.append(modsButton);
+  if (marketButton.parentElement !== nav || marketButton.nextElementSibling !== modsButton) nav.insertBefore(marketButton, modsButton);
+  if (loaderButton.parentElement !== nav || loaderButton.nextElementSibling !== marketButton) nav.insertBefore(loaderButton, marketButton);
   return modsButton;
 };
 
@@ -3058,13 +3056,9 @@ const loadMarket = async (force = false) => {
   if (refreshBtn) refreshBtn.disabled = true;
   renderMarketList();
   try {
-    const me = await api('/api/market/me');
+    const me = await api('/api/market/me').catch(() => ({ user: null }));
     marketUser = me.user || null;
     syncMarketAccount();
-    if (!marketUser) {
-      marketCache = { ok: false, mods: [], recommended: [], tags: [], error: 'login_required', updatedAt: null };
-      return;
-    }
     const result = await api('/api/market' + (force ? '?force=1' : ''));
     marketCache = {
       ok: result.ok !== false,
@@ -3551,7 +3545,7 @@ const renderSidebarButtons = () => {
   ensureLoaderButtons(nav);
   for (const [id, button] of sidebarButtons) if (!sidebarEntries.has(id)) { button.remove(); sidebarButtons.delete(id); }
   const entries = [...sidebarEntries.values()].sort((left, right) => (Number(left.order) || 0) - (Number(right.order) || 0) || String(left.label || '').localeCompare(String(right.label || '')));
-  let anchor = marketButton?.nextElementSibling || modsButton?.nextElementSibling || null;
+  let anchor = modsButton?.nextElementSibling || marketButton?.nextElementSibling || null;
   for (const entry of entries) {
     let button = sidebarButtons.get(entry.id);
     if (!button || !button.isConnected) {
@@ -3822,7 +3816,7 @@ document.addEventListener('click', (event) => {
 }, true);
 
 window.__echoExternalLoaderUi = {
-  version: 44,
+  version: 45,
   registerSidebar,
   unregisterSidebar: removeSidebar,
   uiSettings: () => ({ ...uiSettings }),

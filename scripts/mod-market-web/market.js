@@ -592,25 +592,26 @@
       const navManage = $('[data-nav-manage]');
       if (navManage) navManage.hidden = true;
     };
+    if (gate) gate.hidden = true;
+    if (app) app.hidden = false;
+    const drop = $('[data-drop]');
+    if (drop) drop.hidden = !state.user;
+    const loginLink = $('[data-login-link]');
+    if (loginLink) loginLink.hidden = Boolean(state.user);
     if (!state.user) {
-      if (gate) gate.hidden = false;
-      if (app) app.hidden = true;
       if (userEl) userEl.hidden = true;
       hideManage();
-      return;
+    } else {
+      if (userEl) {
+        userEl.hidden = false;
+        userEl.textContent = (state.user.displayName || state.user.username) + (state.user.isAdmin ? ' · 管理' : '');
+      }
+      const navManage = $('[data-nav-manage]');
+      if (navManage) navManage.hidden = false;
     }
-    if (gate) gate.hidden = true;
-    if (userEl) {
-      userEl.hidden = false;
-      userEl.textContent = (state.user.displayName || state.user.username) + (state.user.isAdmin ? ' · 管理' : '');
-    }
-    const navManage = $('[data-nav-manage]');
-    if (navManage) navManage.hidden = false;
     const res = await api('catalog');
-    if (res.status === 401) {
-      state.user = null;
-      if (gate) gate.hidden = false;
-      if (app) app.hidden = true;
+    if (!res.ok) {
+      if (app) app.hidden = false;
       hideManage();
       return;
     }

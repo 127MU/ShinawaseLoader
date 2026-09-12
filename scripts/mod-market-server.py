@@ -622,9 +622,7 @@ class Handler(BaseHTTPRequestHandler):
             if path == "/me":
                 user = self._user()
                 return self._send(200, {"ok": True, "user": public_user(user)})
-            user = self._need_user()
-            if not user:
-                return
+            user = self._user()
             catalog = load_catalog()
             raw_mods = [item for item in catalog.get("mods") or [] if isinstance(item, dict)]
             community = read_json(COMMUNITY, {"mods": []})
@@ -640,7 +638,7 @@ class Handler(BaseHTTPRequestHandler):
                     continue
                 if raw.get("deleted"):
                     continue
-                if raw.get("unlisted") and (user.get("isAdmin") or can_manage(user, raw)):
+                if raw.get("unlisted") and user and (user.get("isAdmin") or can_manage(user, raw)):
                     base = next((row for row in (seed.get("mods") or []) if isinstance(row, dict) and str(row.get("id") or "") == ident), raw)
                     item = public_mod(overlay_stats({**dict(base), **dict(raw)}, stats, pages))
                     item["unlisted"] = True
@@ -722,9 +720,6 @@ class Handler(BaseHTTPRequestHandler):
             if path == "/login":
                 result = flarum_login(str(body.get("identification") or body.get("username") or ""), str(body.get("password") or ""))
                 return self._send(200, result)
-            user = self._need_user()
-            if not user:
-                return
             if path == "/event":
                 ident = str(body.get("id") or "")
                 kind = str(body.get("type") or "download")
@@ -736,6 +731,9 @@ class Handler(BaseHTTPRequestHandler):
                 with LOCK:
                     entry = bump_stat(ident, kind)
                 return self._send(200, {"ok": True, "id": ident, "stats": entry})
+            user = self._need_user()
+            if not user:
+                return
             if path == "/page":
                 ident = str(body.get("id") or "")
                 if not SAFE_ID.match(ident):
