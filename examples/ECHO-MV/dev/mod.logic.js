@@ -60,9 +60,9 @@ const fallbackSettings = {
   immersiveBackgroundOverlayOpacityPercent: 0,
   lyricsReadabilityEnhanced: false,
   hideLyrics: false,
-  restartAudioOnLoad: false,
+  restartAudioOnLoad: true,
   syncMode: 'balanced',
-  replayAudioOnChange: true,
+  replayAudioOnChange: false,
   enabledProviders: ['bilibili', 'youtube'],
   providerOrder: ['bilibili', 'youtube'],
   maxQuality: 'max',
@@ -282,7 +282,7 @@ const isDirectBili = (video, target) => {
   const id = biliIdFromTarget(target);
   return Boolean(id && video.sourceId === id);
 };
-const shouldFollowMusic = (settings, video, target) => settings.restartAudioOnLoad === true || isDirectBili(video, target);
+const shouldFollowMusic = (_settings, video) => Boolean(video && !isEchoLive(video));
 const videoToCandidate = (video) => ({
   id: video.id,
   provider: video.provider,
@@ -1209,14 +1209,7 @@ const renderPanel = () => {
 };
 
 const replayCurrent = async () => {
-  if (state.settings.replayAudioOnChange === false) return;
-  const track = state.currentTrack;
-  if (!track) return;
-  try {
-    const player = playerApi();
-    if (player?.playTrack) await player.playTrack(track);
-    else if (echoApi().playback?.play) await echoApi().playback.play();
-  } catch {}
+  syncVideos({ force: true, bypassCooldown: true });
 };
 
 const runBusy = async (work) => {
