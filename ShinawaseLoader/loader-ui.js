@@ -1,6 +1,6 @@
-// Loader UI generation 54. Keep this guard in sync with
-// window.__echoExternalLoaderUi.version and ShinawaseLoader.mjs (uiVersion < 54).
-if (window.__echoExternalLoaderUi?.version >= 54) return 'already';
+// Loader UI generation 55. Keep this guard in sync with
+// window.__echoExternalLoaderUi.version and ShinawaseLoader.mjs (uiVersion < 55).
+if (window.__echoExternalLoaderUi?.version >= 55) return 'already';
 window.__echoExternalLoaderUi?.dispose?.();
 
 const base = 'http://127.0.0.1:' + LOADER_PORT;
@@ -659,18 +659,20 @@ css.textContent = `
   .echo-recommend-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-width: 0; }
   .echo-recommend-head p { display: none; }
   .echo-store-pager {
-    display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 6px;
-    padding: 14px 0 4px;
+    display: flex !important; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px;
+    min-height: 40px; padding: 16px 0 8px;
   }
+  .echo-store-pager[hidden] { display: none !important; }
   .echo-store-pager button {
-    min-width: 32px; height: 32px; padding: 0 8px; border: 0; border-radius: 8px;
-    background: transparent; color: inherit; font: 650 13px var(--shl-font); cursor: pointer;
+    min-width: 36px; height: 36px; padding: 0 10px; border: 0; border-radius: 10px;
+    background: color-mix(in srgb, var(--shl-muted) 8%, transparent); color: inherit;
+    font: 650 13px var(--shl-font); cursor: pointer;
   }
   .echo-store-pager button:hover:not(:disabled) { background: var(--shl-row-hover); }
   .echo-store-pager button.is-current {
-    background: color-mix(in srgb, var(--shl-muted) 16%, transparent); cursor: default;
+    background: color-mix(in srgb, var(--shl-muted) 22%, transparent); font-weight: 800; cursor: default;
   }
-  .echo-store-pager button:disabled { opacity: 0.35; cursor: default; }
+  .echo-store-pager button:disabled { opacity: 0.4; cursor: default; }
   .echo-mod-list[data-recommend] { margin-bottom: 4px; }
   .echo-tag-row { display: flex; flex-wrap: wrap; gap: 8px; }
   .echo-market-login, .echo-market-account {
@@ -2940,24 +2942,26 @@ const sliceMarketPage = (items, page, size) => {
   const current = Math.min(Math.max(1, page || 1), pages);
   return { page: current, pages, items: items.slice((current - 1) * size, current * size) };
 };
-const renderMarketPager = (pages, page, onPage) => {
-  const nav = document.createElement('nav');
-  nav.className = 'echo-store-pager';
+const paintMarketPager = (host, pages, page, onPage) => {
+  if (!host) return;
+  host.hidden = false;
+  host.classList.add('echo-store-pager');
   const total = Math.max(1, pages || 1);
   const current = Math.min(Math.max(1, page || 1), total);
+  const nodes = [];
   const add = (label, target, isHere) => {
     const button = document.createElement('button');
     button.type = 'button';
     button.textContent = label;
     if (isHere) button.classList.add('is-current');
     if (target && target !== current) button.onclick = () => onPage(target);
-    else button.disabled = !isHere;
-    nav.append(button);
+    else if (!isHere) button.disabled = true;
+    nodes.push(button);
   };
   add('‹', current > 1 ? current - 1 : 0, false);
   for (let n = 1; n <= total; n += 1) add(String(n), n, n === current);
   add('›', current < total ? current + 1 : 0, false);
-  return nav;
+  host.replaceChildren(...nodes);
 };
 const compareMarketItems = (left, right) => {
   const leftScore = marketSearchScore(left, marketSearchQuery);
@@ -3121,17 +3125,14 @@ const renderMarketList = () => {
   const recHost = marketPanel.querySelector('[data-recommend]');
   const recWrap = marketPanel.querySelector('[data-recommend-wrap]');
   const recPager = marketPanel.querySelector('[data-recommend-pager]');
-  const hideRec = Boolean(marketSearchQuery.trim() || marketTag || marketFilter !== 'all' || marketLoading || !marketCache.ok);
+  const hideRec = Boolean(marketSearchQuery.trim() || marketTag || marketFilter !== 'all' || marketLoading || !marketCache.ok || all.length <= 6);
   const recPool = hideRec ? [] : all.filter((item) => !item.unlisted);
   const recPage = sliceMarketPage(recPool, marketRecPage, 3);
   marketRecPage = recPage.page;
   if (recWrap) recWrap.hidden = recPool.length === 0;
   if (recHost) recHost.replaceChildren(...recPage.items.map((item, index) => renderMarketCard(item, index, animate)));
-  if (recPager) {
-    const next = renderMarketPager(recPage.pages, recPage.page, (page) => { marketRecPage = page; renderMarketList(); });
-    next.setAttribute('data-recommend-pager', '');
-    recPager.replaceWith(next);
-  }
+  paintMarketPager(recPager, recPage.pages, recPage.page, (page) => { marketRecPage = page; renderMarketList(); });
+  if (recPager) recPager.hidden = recPool.length === 0;
   if (marketLoading) {
     renderMarketSkeleton();
     return;
@@ -3149,12 +3150,8 @@ const renderMarketList = () => {
   } else {
     list.replaceChildren(...listPage.items.map((item, index) => renderMarketCard(item, index, animate)));
   }
-  if (listPager) {
-    const next = renderMarketPager(listPage.pages, listPage.page, (page) => { marketListPage = page; renderMarketList(); });
-    next.setAttribute('data-list-pager', '');
-    next.hidden = !items.length;
-    listPager.replaceWith(next);
-  }
+  paintMarketPager(listPager, listPage.pages, listPage.page, (page) => { marketListPage = page; renderMarketList(); });
+  if (listPager) listPager.hidden = !items.length;
   const randomWrap = marketPanel.querySelector('[data-random-wrap]');
   const randomList = marketPanel.querySelector('[data-random-list]');
   const hideRandom = hideRec || !all.length;
@@ -4039,7 +4036,7 @@ document.addEventListener('click', (event) => {
 }, true);
 
 window.__echoExternalLoaderUi = {
-  version: 54,
+  version: 55,
   registerSidebar,
   unregisterSidebar: removeSidebar,
   uiSettings: () => ({ ...uiSettings }),

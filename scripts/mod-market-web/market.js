@@ -515,7 +515,7 @@
     const rec = recommended();
     const recWrap = $('[data-recommend-wrap]');
     const recHost = $('[data-recommend]');
-    const hideRec = Boolean(state.query.trim() || state.tag);
+    const hideRec = Boolean(state.query.trim() || state.tag || state.mods.length <= 6);
     const recPool = hideRec ? [] : state.mods.filter((item) => !item.unlisted);
     recWrap.hidden = hideRec || !recPool.length;
     const recPage = slicePage(recPool, state.recPage, 3);
