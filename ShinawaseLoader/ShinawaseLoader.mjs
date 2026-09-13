@@ -1597,7 +1597,7 @@ const injectEnabled = async () => {
       const targetState = probe?.result?.value;
       if (targetState?.ready !== true) continue;
       lastCycleReadyCount += 1;
-      const uiReloaded = targetState.uiVersion < 49;
+      const uiReloaded = targetState.uiVersion < 50;
       if (uiReloaded) await injectLoaderUi(session).catch((error) => log('WARN', `loader UI injection failed: ${error.message}`, error));
       if (targetState.playerVersion < 1) await injectPlayerRuntime(session).catch((error) => log('WARN', `player runtime injection failed: ${error.message}`, error));
       if (targetState.extendVersion < 1) await injectExtendRuntime(session).catch((error) => log('WARN', `extend runtime injection failed: ${error.message}`, error));
@@ -2286,7 +2286,12 @@ const listMarket = async (options = {}) => {
     } else {
       catalog = await readMarketCatalog(options);
     }
-    const mods = catalog.mods.map(normalizeMarketListing).filter(Boolean).map(decorateMarketListing);
+    const seen = new Set();
+    const mods = catalog.mods.map(normalizeMarketListing).filter(Boolean).filter((item) => {
+      if (!item.id || seen.has(item.id)) return false;
+      seen.add(item.id);
+      return true;
+    }).map(decorateMarketListing);
     const installedIds = new Set(mods.filter((item) => item.installed).map((item) => item.id));
     const installedTags = new Set(mods.filter((item) => item.installed).flatMap((item) => item.tags || []));
     const recommended = mods

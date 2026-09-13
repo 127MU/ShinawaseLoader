@@ -499,7 +499,8 @@
     const hideRec = Boolean(state.query.trim() || state.tag);
     recWrap.hidden = hideRec || !rec.length;
     recHost.replaceChildren(...rec.map((item) => card(item, '获取')));
-    const items = filtered();
+    const recIds = new Set((hideRec ? [] : rec).map((item) => item.id));
+    const items = filtered().filter((item) => !recIds.has(item.id));
     $('[data-count]').textContent = String(items.length);
     const list = $('[data-list]');
     if (!items.length) list.replaceChildren(empty('没有匹配的插件', '试试其他关键词或标签。'));
@@ -639,7 +640,13 @@
       return;
     }
     const catalog = await res.json();
-    state.mods = Array.isArray(catalog.mods) ? catalog.mods : [];
+    const seen = new Set();
+    state.mods = (Array.isArray(catalog.mods) ? catalog.mods : []).filter((item) => {
+      const ident = String(item?.id || '');
+      if (!ident || seen.has(ident)) return false;
+      seen.add(ident);
+      return true;
+    });
     state.updatedAt = catalog.updatedAt || '';
     render();
     showView(stayManage ? 'manage' : 'market');

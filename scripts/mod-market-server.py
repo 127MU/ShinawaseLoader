@@ -320,16 +320,18 @@ def merge_catalog() -> dict:
         overlay_stats(item, stats, pages)
         official.append(public_mod(item))
     uploaded = []
+    seen = set(official_ids)
     for raw in community.get("mods") or []:
         if not isinstance(raw, dict):
             continue
         ident = str(raw.get("id") or "")
-        if ident in official_ids or not SAFE_ID.match(ident):
+        if ident in seen or not SAFE_ID.match(ident):
             continue
         item = dict(raw)
         item["channel"] = "community"
         if item.get("unlisted") or item.get("deleted"):
             continue
+        seen.add(ident)
         overlay_stats(item, stats, pages)
         uploaded.append(public_mod(item))
     catalog = {
@@ -645,8 +647,16 @@ class Handler(BaseHTTPRequestHandler):
                     raw_mods.append(item)
                     seen.add(ident)
             mods = visible_mods(raw_mods, user)
+            unique = []
+            kept = set()
             for item in mods:
+                ident = str(item.get("id") or "")
+                if not ident or ident in kept:
+                    continue
+                kept.add(ident)
                 item["canManage"] = can_manage(user, item)
+                unique.append(item)
+            mods = unique
             if path in ("/catalog", "/index.json"):
                 out = dict(catalog)
                 out["mods"] = mods

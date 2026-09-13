@@ -1,6 +1,6 @@
-// Loader UI generation 49. Keep this guard in sync with
-// window.__echoExternalLoaderUi.version and ShinawaseLoader.mjs (uiVersion < 49).
-if (window.__echoExternalLoaderUi?.version >= 49) return 'already';
+// Loader UI generation 50. Keep this guard in sync with
+// window.__echoExternalLoaderUi.version and ShinawaseLoader.mjs (uiVersion < 50).
+if (window.__echoExternalLoaderUi?.version >= 50) return 'already';
 window.__echoExternalLoaderUi?.dispose?.();
 
 const base = 'http://127.0.0.1:' + LOADER_PORT;
@@ -3036,7 +3036,8 @@ const renderMarketList = () => {
     list.replaceChildren(renderMarketEmpty(marketCache.error === 'login_required' ? 'login' : 'offline'));
     return;
   }
-  const items = filteredMarketItems();
+  const recIds = new Set(rec.map((item) => item.id));
+  const items = filteredMarketItems().filter((item) => !recIds.has(item.id));
   if (!items.length) {
     list.replaceChildren(renderMarketEmpty(all.length ? 'search' : 'empty'));
     return;
@@ -3896,7 +3897,7 @@ document.addEventListener('click', (event) => {
 }, true);
 
 window.__echoExternalLoaderUi = {
-  version: 49,
+  version: 50,
   registerSidebar,
   unregisterSidebar: removeSidebar,
   uiSettings: () => ({ ...uiSettings }),
