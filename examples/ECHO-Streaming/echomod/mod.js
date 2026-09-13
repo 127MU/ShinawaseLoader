@@ -1044,16 +1044,19 @@ const renderPlaylistDetail = () => {
   const header = make('header', 'playlist-detail-header');
   header.dataset.hasArt = 'false';
   const cover = make('div', 'playlist-cover');
-  appendNativeCover(cover, coverSrc, playlist?.id || playlist?.providerPlaylistId, 80);
+  appendNativeCover(cover, coverSrc, playlist?.id || playlist?.providerPlaylistId, 48);
   header.append(cover);
   const details = make('div', 'playlist-detail-copy');
-  details.append(make('span', '', daily ? dailyKindLabel(playlist.dailyKind || playlist.kind) : copy.playlistKicker));
   details.append(make('h2', '', playlist?.title || playlist?.name || ''));
-  details.append(make('p', '', playlist?.creator || playlist?.provider || ''));
-  details.append(make('small', '', [playlist?.provider, formatTrackCount(tracks.length || playlist?.trackCount), formatAlbumDuration(tracks)].filter(Boolean).join(' · ')));
+  details.append(make('small', '', [
+    daily ? dailyKindLabel(playlist.dailyKind || playlist.kind) : (playlist?.creator || copy.playlistKicker),
+    playlist?.provider,
+    formatTrackCount(tracks.length || playlist?.trackCount),
+    formatAlbumDuration(tracks),
+  ].filter(Boolean).join(' · ')));
   const actions = make('div', 'playlist-actions playlist-detail-primary-actions');
-  actions.append(actionButton(state.playlistLoading ? copy.readingPlaylist : copy.playPlaylist, state.playlistLoading ? 'refresh' : 'play', handlePlayPlaylist, { className: 'primary-action', disabled: state.playlistLoading || !playable.length, title: copy.playPlaylist }));
-  actions.append(actionButton(copy.addToQueue, 'list', handleQueuePlaylist, { className: 'secondary-action', disabled: !playable.length, title: copy.addToQueue }));
+  actions.append(actionButton(state.playlistLoading ? copy.readingPlaylist : copy.playPlaylist, state.playlistLoading ? 'refresh' : 'play', handlePlayPlaylist, { iconOnly: true, className: 'tool-button', disabled: state.playlistLoading || !playable.length, title: copy.playPlaylist, ariaLabel: copy.playPlaylist }));
+  actions.append(actionButton(copy.addToQueue, 'list', handleQueuePlaylist, { iconOnly: true, className: 'tool-button', disabled: !playable.length, title: copy.addToQueue, ariaLabel: copy.addToQueue }));
   const downloadable = tracks.filter((track) => canDownloadTrackToMusic(track)).length;
   const extras = [
     {
@@ -1087,8 +1090,7 @@ const renderPlaylistDetail = () => {
     });
   }
   actions.append(renderPlaylistOverflow(extras));
-  details.append(actions);
-  header.append(details);
+  header.append(details, actions);
   panel.append(header);
   if (state.playlistError) panel.append(make('p', 'playlist-detail-error', state.playlistError));
   if (state.playlistLoading && !tracks.length) panel.append(make('div', 'list-footer', chinese ? '正在读取歌单...' : 'Reading playlist...'));
