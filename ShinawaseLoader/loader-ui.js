@@ -1,6 +1,6 @@
-// Loader UI generation 55. Keep this guard in sync with
-// window.__echoExternalLoaderUi.version and ShinawaseLoader.mjs (uiVersion < 55).
-if (window.__echoExternalLoaderUi?.version >= 55) return 'already';
+// Loader UI generation 56. Keep this guard in sync with
+// window.__echoExternalLoaderUi.version and ShinawaseLoader.mjs (uiVersion < 56).
+if (window.__echoExternalLoaderUi?.version >= 56) return 'already';
 window.__echoExternalLoaderUi?.dispose?.();
 
 const base = 'http://127.0.0.1:' + LOADER_PORT;
@@ -1291,11 +1291,24 @@ css.textContent = `
   .echo-mod-list[data-layout="store"] {
     display: grid !important; grid-template-columns: repeat(3, minmax(0, 1fr)) !important; gap: 14px;
   }
+  .echo-mod-list[data-layout="store"] > .echo-empty { grid-column: 1 / -1; }
+  .echo-mod-list[data-layout="store"] > .echo-skel { min-height: 168px; }
+  .echo-mod-list[data-layout="store"] > .echo-mod-row,
+  .echo-mod-list[data-layout="store"] > .echo-store-card {
+    display: flex !important; flex-direction: column; align-items: stretch;
+    grid-template-columns: none; grid-template-rows: none;
+  }
   .echo-store-card {
     display: flex; flex-direction: column; gap: 12px; min-width: 0; max-width: 100%; min-height: 168px;
     padding: 16px; border: 1px solid color-mix(in srgb, var(--shl-border) 70%, transparent);
     border-radius: 16px; background: var(--shl-panel);
     box-shadow: 0 1px 2px rgba(16, 19, 24, 0.04);
+  }
+  .echo-store-slot {
+    min-height: 168px; pointer-events: none;
+    border: 1px dashed color-mix(in srgb, var(--shl-border) 85%, transparent);
+    border-radius: 16px;
+    background: color-mix(in srgb, var(--shl-panel) 42%, transparent);
   }
   .echo-store-card:hover {
     transform: none; border-color: color-mix(in srgb, var(--shl-accent) 22%, var(--shl-border));
@@ -1330,6 +1343,7 @@ css.textContent = `
   .echo-store-card .echo-market-action { min-height: 32px; border-radius: 8px; box-shadow: none; }
   @media (max-width: 560px) {
     .echo-mod-list[data-layout="store"] { grid-template-columns: minmax(0, 1fr) !important; }
+    .echo-store-slot { display: none !important; }
   }
 
   /* ---- Keyframes ---- */
@@ -2661,13 +2675,16 @@ const openConfigModal = async (modId, modName) => {
   } catch (error) { errorNode.textContent = error.message; }
 };
 
+const bytesToBase64 = (bytes) => {
+  let binary = '';
+  for (let i = 0; i < bytes.length; i += 0x8000) binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  return btoa(binary);
+};
+
 const processFileImport = async (file) => {
   if (!file) return;
   const buffer = await file.arrayBuffer();
-  let binary = '';
-  const bytes = new Uint8Array(buffer);
-  for (let i = 0; i < bytes.length; i += 1) binary += String.fromCharCode(bytes[i]);
-  const res = await api('/api/import', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ data: btoa(binary), name: file.name }) });
+  const res = await api('/api/import', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ data: bytesToBase64(new Uint8Array(buffer)), name: file.name }) });
   toast((res.manifest?.name || res.manifest?.id || file.name), 'success');
   await loadMods();
 };
@@ -2914,7 +2931,7 @@ const renderMarketEmpty = (kind) => {
 const renderMarketSkeleton = () => {
   const list = marketPanel?.querySelector('[data-market-list]');
   if (!list) return;
-  list.replaceChildren(...[0, 1, 2, 3].map(() => {
+  list.replaceChildren(...Array.from({ length: MARKET_LIST_PAGE }, () => {
     const row = document.createElement('div');
     row.className = 'echo-skel';
     row.innerHTML = '<i class="echo-skel-icon"></i><div class="echo-skel-copy"><i></i><i></i></div><i class="echo-skel-btn"></i>';
@@ -2927,6 +2944,10 @@ const syncMarketToolbar = () => {
     chip.classList.toggle('active', chip.dataset.marketFilter === marketFilter);
   });
 };
+const MARKET_STORE_COLS = 3;
+const MARKET_LIST_PAGE = 6;
+const MARKET_REC_PAGE = 3;
+const MARKET_RANDOM_COUNT = 3;
 const shuffleMarketMods = (count) => {
   const pool = [...(marketCache.mods || [])].filter((item) => !item.unlisted);
   for (let i = pool.length - 1; i > 0; i -= 1) {
@@ -2941,6 +2962,23 @@ const sliceMarketPage = (items, page, size) => {
   const pages = Math.max(1, Math.ceil((items.length || 0) / size) || 1);
   const current = Math.min(Math.max(1, page || 1), pages);
   return { page: current, pages, items: items.slice((current - 1) * size, current * size) };
+};
+const marketStoreColumns = () => {
+  try { if (window.matchMedia('(max-width: 560px)').matches) return 1; } catch {}
+  return MARKET_STORE_COLS;
+};
+const renderStoreSlot = () => {
+  const slot = document.createElement('div');
+  slot.className = 'echo-store-slot';
+  slot.setAttribute('aria-hidden', 'true');
+  return slot;
+};
+const padStoreRow = (nodes, columns = marketStoreColumns()) => {
+  const list = Array.isArray(nodes) ? [...nodes] : [];
+  if (!list.length || columns < 2) return list;
+  const rem = list.length % columns;
+  if (rem) for (let i = rem; i < columns; i += 1) list.push(renderStoreSlot());
+  return list;
 };
 const paintMarketPager = (host, pages, page, onPage) => {
   if (!host) return;
@@ -3125,43 +3163,49 @@ const renderMarketList = () => {
   const recHost = marketPanel.querySelector('[data-recommend]');
   const recWrap = marketPanel.querySelector('[data-recommend-wrap]');
   const recPager = marketPanel.querySelector('[data-recommend-pager]');
-  const hideRec = Boolean(marketSearchQuery.trim() || marketTag || marketFilter !== 'all' || marketLoading || !marketCache.ok || all.length <= 6);
-  const recPool = hideRec ? [] : all.filter((item) => !item.unlisted);
-  const recPage = sliceMarketPage(recPool, marketRecPage, 3);
+  const listPager = marketPanel.querySelector('[data-list-pager]');
+  const randomWrap = marketPanel.querySelector('[data-random-wrap]');
+  const randomList = marketPanel.querySelector('[data-random-list]');
+  if (randomList) randomList.dataset.layout = 'store';
+  const searching = Boolean(marketSearchQuery.trim() || marketTag || marketFilter !== 'all');
+  const hideRec = Boolean(searching || marketLoading || !marketCache.ok || all.length <= MARKET_LIST_PAGE);
+  const hideRandom = Boolean(searching || marketLoading || !marketCache.ok || !all.length);
+  const recPool = hideRec ? [] : (marketCache.recommended || []).filter((item) => !item.unlisted);
+  const recPage = sliceMarketPage(recPool, marketRecPage, MARKET_REC_PAGE);
   marketRecPage = recPage.page;
   if (recWrap) recWrap.hidden = recPool.length === 0;
-  if (recHost) recHost.replaceChildren(...recPage.items.map((item, index) => renderMarketCard(item, index, animate)));
+  if (recHost) recHost.replaceChildren(...padStoreRow(recPage.items.map((item, index) => renderMarketCard(item, index, animate))));
   paintMarketPager(recPager, recPage.pages, recPage.page, (page) => { marketRecPage = page; renderMarketList(); });
   if (recPager) recPager.hidden = recPool.length === 0;
+  if (hideRandom) {
+    if (randomWrap) randomWrap.hidden = true;
+  }
   if (marketLoading) {
     renderMarketSkeleton();
+    if (listPager) listPager.hidden = true;
     return;
   }
   if (!marketCache.ok) {
     list.replaceChildren(renderMarketEmpty(marketCache.error === 'login_required' ? 'login' : 'offline'));
+    if (listPager) listPager.hidden = true;
     return;
   }
   const items = filteredMarketItems();
-  const listPage = sliceMarketPage(items, marketListPage, 6);
+  const listPage = sliceMarketPage(items, marketListPage, MARKET_LIST_PAGE);
   marketListPage = listPage.page;
-  const listPager = marketPanel.querySelector('[data-list-pager]');
   if (!items.length) {
     list.replaceChildren(renderMarketEmpty(all.length ? 'search' : 'empty'));
   } else {
-    list.replaceChildren(...listPage.items.map((item, index) => renderMarketCard(item, index, animate)));
+    list.replaceChildren(...padStoreRow(listPage.items.map((item, index) => renderMarketCard(item, index, animate))));
   }
   paintMarketPager(listPager, listPage.pages, listPage.page, (page) => { marketListPage = page; renderMarketList(); });
   if (listPager) listPager.hidden = !items.length;
-  const randomWrap = marketPanel.querySelector('[data-random-wrap]');
-  const randomList = marketPanel.querySelector('[data-random-list]');
-  const hideRandom = hideRec || !all.length;
-  if (randomList) randomList.dataset.layout = 'store';
   if (hideRandom) {
     if (randomWrap) randomWrap.hidden = true;
   } else {
-    if (!marketRandomPick.length) marketRandomPick = shuffleMarketMods(3);
+    if (!marketRandomPick.length) marketRandomPick = shuffleMarketMods(MARKET_RANDOM_COUNT);
     if (randomWrap) randomWrap.hidden = marketRandomPick.length === 0;
-    if (randomList) randomList.replaceChildren(...marketRandomPick.map((item, index) => renderMarketCard(item, index, false)));
+    if (randomList) randomList.replaceChildren(...padStoreRow(marketRandomPick.map((item, index) => renderMarketCard(item, index, false))));
   }
 };
 const setMarketLoginOpen = (open) => {
@@ -3483,13 +3527,10 @@ const processMarketUpload = async (file) => {
   if (dropLabel) dropLabel.textContent = T.marketUploading || T.installingMarket;
   try {
     const buffer = await file.arrayBuffer();
-    let binary = '';
-    const bytes = new Uint8Array(buffer);
-    for (let i = 0; i < bytes.length; i += 1) binary += String.fromCharCode(bytes[i]);
     const result = await api('/api/market/upload', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ data: btoa(binary), name: file.name }),
+      body: JSON.stringify({ data: bytesToBase64(new Uint8Array(buffer)), name: file.name }),
     });
     const name = result.mod?.name || result.mod?.id || file.name;
     toast((T.marketUploadedToast || '{name}').replace('{name}', name), 'success');
@@ -3568,10 +3609,15 @@ const openMarket = async () => {
           <span class="section-kicker">${T.marketRecommend || 'Recommended'}</span>
         </div>
         <div class="echo-mod-list" data-recommend></div>
-        <nav class="echo-store-pager" data-recommend-pager></nav>
+        <div class="echo-store-pager" data-recommend-pager></div>
       </section>
-      <div class="echo-mod-list" data-market-list></div>
-      <nav class="echo-store-pager" data-list-pager></nav>
+      <section class="echo-recommend" data-all-wrap>
+        <div class="echo-recommend-head">
+          <span class="section-kicker">${T.marketAllPlugins || '全部插件'}</span>
+        </div>
+        <div class="echo-mod-list" data-market-list></div>
+        <div class="echo-store-pager" data-list-pager></div>
+      </section>
       <section class="echo-recommend" data-random-wrap hidden>
         <div class="echo-recommend-head">
           <span class="section-kicker">${T.marketRandom || '随机插件'}</span>
@@ -3637,7 +3683,7 @@ const openMarket = async () => {
   });
   marketPanel.querySelector('[data-action="refresh"]').onclick = () => void loadMarket(true);
   marketPanel.querySelector('[data-random-shuffle]')?.addEventListener('click', () => {
-    marketRandomPick = shuffleMarketMods(3);
+    marketRandomPick = shuffleMarketMods(MARKET_RANDOM_COUNT);
     renderMarketList();
   });
   marketPanel.querySelector('[data-action="manage"]').onclick = () => showMarketManage(true);
@@ -4036,7 +4082,7 @@ document.addEventListener('click', (event) => {
 }, true);
 
 window.__echoExternalLoaderUi = {
-  version: 55,
+  version: 56,
   registerSidebar,
   unregisterSidebar: removeSidebar,
   uiSettings: () => ({ ...uiSettings }),

@@ -16,12 +16,38 @@
       pool[i] = pool[j];
       pool[j] = swap;
     }
-    return pool.slice(0, Math.min(count, pool.length));
+    return pool.slice(0, Math.min(count || RANDOM_COUNT, pool.length));
   };
+  const STORE_COLS = 3;
+  const LIST_PAGE = 6;
+  const REC_PAGE = 3;
+  const RANDOM_COUNT = 3;
   const slicePage = (items, page, size) => {
     const pages = Math.max(1, Math.ceil((items.length || 0) / size) || 1);
     const current = Math.min(Math.max(1, page || 1), pages);
     return { page: current, pages, items: items.slice((current - 1) * size, current * size) };
+  };
+  const storeColumns = () => {
+    try {
+      if (window.matchMedia('(max-width: 640px)').matches) return 1;
+      if (window.matchMedia('(max-width: 980px)').matches) return 2;
+    } catch {}
+    return STORE_COLS;
+  };
+  const padStoreRow = (nodes) => {
+    const list = Array.isArray(nodes) ? [...nodes] : [];
+    const columns = storeColumns();
+    if (!list.length || columns < 2) return list;
+    const rem = list.length % columns;
+    if (rem) {
+      for (let i = rem; i < columns; i += 1) {
+        const slot = document.createElement('div');
+        slot.className = 'store-slot';
+        slot.setAttribute('aria-hidden', 'true');
+        list.push(slot);
+      }
+    }
+    return list;
   };
   const paintPager = (host, pages, page, onPage) => {
     if (!host) return;
@@ -512,32 +538,37 @@
   const render = () => {
     renderTags();
     renderSuggest();
-    const rec = recommended();
+    const searching = Boolean(state.query.trim() || state.tag);
     const recWrap = $('[data-recommend-wrap]');
     const recHost = $('[data-recommend]');
-    const hideRec = Boolean(state.query.trim() || state.tag || state.mods.length <= 6);
-    const recPool = hideRec ? [] : state.mods.filter((item) => !item.unlisted);
+    const hideRec = Boolean(searching || state.mods.length <= LIST_PAGE);
+    const recPool = hideRec ? [] : recommended();
     recWrap.hidden = hideRec || !recPool.length;
-    const recPage = slicePage(recPool, state.recPage, 3);
+    const recPage = slicePage(recPool, state.recPage, REC_PAGE);
     state.recPage = recPage.page;
-    recHost.replaceChildren(...recPage.items.map((item) => card(item, '获取')));
+    recHost.replaceChildren(...padStoreRow(recPage.items.map((item) => card(item, '获取'))));
     paintPager($('[data-recommend-pager]'), recPage.pages, recPage.page, (page) => { state.recPage = page; render(); });
+    const recPager = $('[data-recommend-pager]');
+    if (recPager) recPager.hidden = recWrap.hidden;
     const items = filtered();
-    const listPage = slicePage(items, state.listPage, 6);
+    const listPage = slicePage(items, state.listPage, LIST_PAGE);
     state.listPage = listPage.page;
     $('[data-count]').textContent = String(items.length);
     const list = $('[data-list]');
     if (!items.length) list.replaceChildren(empty('没有匹配的插件', '试试其他关键词或标签。'));
-    else list.replaceChildren(...listPage.items.map((item) => card(item)));
+    else list.replaceChildren(...padStoreRow(listPage.items.map((item) => card(item))));
     paintPager($('[data-list-pager]'), listPage.pages, listPage.page, (page) => { state.listPage = page; render(); });
+    const listPager = $('[data-list-pager]');
+    if (listPager) listPager.hidden = !items.length;
     const randomWrap = $('[data-random-wrap]');
     const randomHost = $('[data-random]');
-    if (hideRec || !state.mods.length) {
+    const hideRandom = searching || !state.mods.length;
+    if (hideRandom) {
       if (randomWrap) randomWrap.hidden = true;
     } else {
-      if (!state.randomPick) state.randomPick = shuffleMods(3);
+      if (!state.randomPick) state.randomPick = shuffleMods(RANDOM_COUNT);
       if (randomWrap) randomWrap.hidden = !state.randomPick.length;
-      if (randomHost) randomHost.replaceChildren(...state.randomPick.map((item) => card(item)));
+      if (randomHost) randomHost.replaceChildren(...padStoreRow(state.randomPick.map((item) => card(item))));
     }
     $('[data-footer]').textContent = `${state.mods.length} 个插件` + (state.updatedAt ? ' · 更新于 ' + state.updatedAt : '');
     $('[data-search-clear]').hidden = !state.query;
@@ -622,7 +653,7 @@
     });
     const shuffle = $('[data-random-shuffle]');
     if (shuffle) shuffle.addEventListener('click', () => {
-      state.randomPick = shuffleMods(3);
+      state.randomPick = shuffleMods(RANDOM_COUNT);
       render();
     });
     const loginLink = $('[data-login-link]');
