@@ -585,7 +585,7 @@
 
 .streaming-hub--spatial .playlists-page.streaming-playlist-workspace {
   display: grid;
-  grid-template-columns: clamp(220px, 24vw, 280px) minmax(0, 1fr);
+  grid-template-columns: minmax(168px, 220px) minmax(0, 1fr);
   height: 100%;
   min-height: 0;
   overflow: hidden;
@@ -607,24 +607,30 @@
   grid-template-rows: auto minmax(0, 1fr);
   min-width: 0;
   min-height: 0;
-  overflow: auto;
+  overflow: hidden;
 }
 
 .streaming-hub--spatial .streaming-playlist-workspace .playlist-detail-header,
 .echo-external-mod-page .streaming-playlist-page .playlist-detail-header {
-  display: grid;
-  grid-template-columns: 96px minmax(0, 1fr);
+  display: grid !important;
+  grid-template-columns: 80px minmax(0, 1fr) !important;
+  grid-template-rows: auto !important;
   align-items: start;
-  gap: 12px 14px;
-  padding: 10px 16px 12px;
+  gap: 10px 12px;
+  padding: 10px 14px 8px;
   min-width: 0;
+  overflow: visible;
+  z-index: 3;
+  background: var(--theme-panel-bg, var(--theme-page-bg, #fff));
 }
 
 .streaming-hub--spatial .streaming-playlist-workspace .playlist-cover,
 .echo-external-mod-page .streaming-playlist-page .playlist-cover {
-  display: block;
-  width: 96px;
-  height: 96px;
+  display: block !important;
+  width: 80px !important;
+  height: 80px !important;
+  max-width: 80px !important;
+  max-height: 80px !important;
   flex: none;
   overflow: hidden;
   border-radius: 10px;
@@ -634,10 +640,10 @@
 .streaming-hub--spatial .streaming-playlist-workspace .playlist-cover img,
 .echo-external-mod-page .streaming-playlist-page .playlist-cover img {
   display: block;
-  width: 96px;
-  height: 96px;
-  max-width: 96px;
-  max-height: 96px;
+  width: 80px !important;
+  height: 80px !important;
+  max-width: 80px !important;
+  max-height: 80px !important;
   object-fit: cover;
 }
 
@@ -671,7 +677,27 @@
 
 .streaming-hub--spatial .streaming-playlist-workspace .playlist-detail-primary-actions,
 .echo-external-mod-page .streaming-playlist-page .playlist-detail-primary-actions {
-  margin-top: 6px;
+  margin-top: 8px;
+}
+
+.streaming-hub--spatial .streaming-playlist-workspace .playlist-track-list,
+.echo-external-mod-page .streaming-playlist-page .playlist-track-list {
+  min-height: 0;
+  overflow: auto;
+  padding: 4px 12px 24px;
+}
+
+.streaming-hub--spatial .streaming-playlist-workspace .track-title,
+.echo-external-mod-page .streaming-playlist-page .track-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.streaming-hub--spatial .streaming-playlist-workspace .track-main,
+.echo-external-mod-page .streaming-playlist-page .track-main {
+  min-width: 0;
 }
 
 .streaming-hub--spatial .streaming-playlist-workspace .playlist-detail-hero-art {
@@ -701,7 +727,7 @@
   position: absolute;
   top: calc(100% + 6px);
   right: 0;
-  z-index: 8;
+  z-index: 20;
   display: grid;
   min-width: 196px;
   padding: 6px;
@@ -826,6 +852,7 @@
   align-items: center;
   gap: 8px;
   width: 100%;
+  min-width: 0;
   min-height: 44px;
   padding: 4px 6px;
   border: 0;
@@ -974,14 +1001,22 @@
   cursor: pointer;
 }
 
-.streaming-hub--spatial .streaming-discovery-card .streaming-cover,
-.streaming-hub--spatial .streaming-account-playlist-row .streaming-cover {
+.streaming-hub--spatial .streaming-discovery-card .streaming-cover {
   display: grid;
   width: 52px;
   height: 52px;
   overflow: hidden;
   place-items: center;
   border-radius: var(--radius-md, 8px);
+}
+
+.streaming-hub--spatial .streaming-account-playlist-row .streaming-cover {
+  display: grid;
+  width: 40px;
+  height: 40px;
+  overflow: hidden;
+  place-items: center;
+  border-radius: 8px;
 }
 
 .streaming-hub--spatial .streaming-discovery-card .streaming-cover img,

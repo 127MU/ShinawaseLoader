@@ -1044,7 +1044,7 @@ const renderPlaylistDetail = () => {
   const header = make('header', 'playlist-detail-header');
   header.dataset.hasArt = 'false';
   const cover = make('div', 'playlist-cover');
-  appendNativeCover(cover, coverSrc, playlist?.id || playlist?.providerPlaylistId, 96);
+  appendNativeCover(cover, coverSrc, playlist?.id || playlist?.providerPlaylistId, 80);
   header.append(cover);
   const details = make('div', 'playlist-detail-copy');
   details.append(make('span', '', daily ? dailyKindLabel(playlist.dailyKind || playlist.kind) : copy.playlistKicker));
