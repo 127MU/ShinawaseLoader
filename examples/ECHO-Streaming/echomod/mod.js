@@ -1104,7 +1104,7 @@ const renderPlaylistDetail = () => {
 };
 
 const renderPlaylistPanel = (playlists) => {
-  const page = make('div', 'playlists-page streaming-playlist-workspace');
+  const page = make('div', 'streaming-playlist-workspace');
   const sidebar = make('aside', 'playlist-sidebar');
   const form = make('form', 'streaming-playlist-import');
   const label = make('label', 'search-box echo-search-surface');
@@ -5280,7 +5280,7 @@ const recoverStreamingTrackFromRow = (row) => {
 const onUnavailableStreamingPlaylistClick = (event) => {
   if (packageDisposed || event.defaultPrevented || event.button !== 0) return;
   if (event.target?.closest?.('button, a, input, textarea, .row-action, .track-actions, .queue-row-actions')) return;
-  const row = event.target?.closest?.('.playlists-page .track-row[data-unavailable="true"], .playlist-detail .track-row[data-unavailable="true"], .collection-playlist-workspace .track-row[data-unavailable="true"]');
+  const row = event.target?.closest?.('.streaming-playlist-workspace .track-row[data-unavailable="true"], .playlists-page .track-row[data-unavailable="true"], .playlist-detail .track-row[data-unavailable="true"], .collection-playlist-workspace .track-row[data-unavailable="true"]');
   if (!row) return;
   const track = recoverStreamingTrackFromRow(row);
   if (!track?.provider || !track?.providerTrackId) return;

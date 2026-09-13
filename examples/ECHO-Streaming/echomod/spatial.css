@@ -585,12 +585,16 @@
   grid-template-rows: minmax(0, 1fr);
 }
 
-.streaming-hub--spatial .playlists-page.streaming-playlist-workspace {
+.streaming-hub--spatial .streaming-playlist-workspace {
   display: grid;
   grid-template-columns: minmax(200px, 252px) minmax(0, 1fr);
   height: 100%;
   min-height: 0;
   overflow: hidden;
+  gap: 0;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
 }
 
 .streaming-hub--spatial .streaming-playlist-workspace > .playlist-sidebar {
@@ -601,7 +605,7 @@
   min-height: 0;
   overflow: auto;
   padding: 4px 12px 18px 0;
-  border-right: 0;
+  border: 0;
   background: transparent;
 }
 
@@ -619,15 +623,20 @@
   grid-template-columns: 48px minmax(0, 1fr) auto !important;
   grid-template-rows: auto !important;
   align-items: center;
+  align-content: center;
   gap: 8px 10px;
-  padding: 6px 12px 8px;
+  min-height: 0 !important;
+  height: auto !important;
+  padding: 6px 12px 8px !important;
   min-width: 0;
   overflow: visible;
+  isolation: auto !important;
   z-index: 3;
-  background: transparent;
-  border: 0;
-  border-bottom: 0;
-  box-shadow: none;
+  background: transparent !important;
+  background-image: none !important;
+  border: 0 !important;
+  border-bottom: 0 !important;
+  box-shadow: none !important;
 }
 
 .streaming-hub--spatial .streaming-playlist-workspace .playlist-cover,
@@ -639,10 +648,10 @@
   max-height: 48px !important;
   flex: none;
   overflow: hidden;
-  border: 0;
+  border: 0 !important;
   border-radius: 6px;
-  background: transparent;
-  box-shadow: none;
+  background: transparent !important;
+  box-shadow: none !important;
 }
 
 .streaming-hub--spatial .streaming-playlist-workspace .playlist-cover img,
@@ -669,9 +678,11 @@
   font-size: 14px;
   font-weight: 700;
   line-height: 1.25;
+  letter-spacing: -0.02em;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  text-shadow: none;
 }
 
 .streaming-hub--spatial .streaming-playlist-workspace .playlist-detail-copy p,
@@ -1244,6 +1255,71 @@
     overflow-x: auto;
   }
 }
+}
+
+/* Official .playlists-page paints a 238px accent-gradient hero and a split
+   rail. Keep our workspace off that class, and pin these resets outside
+   @scope so host playlist CSS cannot win on order/proximity. */
+.echo-external-mod-page .streaming-playlist-workspace,
+.echo-external-mod-page .streaming-playlist-workspace.playlists-page {
+  background: transparent !important;
+  background-image: none !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+.echo-external-mod-page .streaming-playlist-workspace > .playlist-sidebar {
+  background: transparent !important;
+  background-image: none !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+.echo-external-mod-page .streaming-playlist-workspace .playlist-detail-panel,
+.echo-external-mod-page .streaming-playlist-page .playlist-detail-panel {
+  background: transparent !important;
+  background-image: none !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+.echo-external-mod-page .streaming-playlist-workspace .playlist-detail-header,
+.echo-external-mod-page .streaming-playlist-page .playlist-detail-header {
+  min-height: 0 !important;
+  height: auto !important;
+  isolation: auto !important;
+  background: transparent !important;
+  background-image: none !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  padding: 6px 12px 8px !important;
+  grid-template-columns: 48px minmax(0, 1fr) auto !important;
+  grid-template-rows: auto !important;
+}
+.echo-external-mod-page .streaming-playlist-workspace .playlist-detail-hero-art,
+.echo-external-mod-page .streaming-playlist-page .playlist-detail-hero-art {
+  display: none !important;
+}
+.echo-external-mod-page .streaming-playlist-workspace .playlist-cover,
+.echo-external-mod-page .streaming-playlist-page .playlist-cover {
+  width: 48px !important;
+  height: 48px !important;
+  max-width: 48px !important;
+  max-height: 48px !important;
+  grid-row: auto !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  background: transparent !important;
+}
+.echo-external-mod-page .streaming-playlist-workspace .playlist-detail-copy h2,
+.echo-external-mod-page .streaming-playlist-page .playlist-detail-copy h2 {
+  font-size: 14px !important;
+  font-weight: 700 !important;
+  letter-spacing: -0.02em !important;
+  text-shadow: none !important;
+}
+.echo-external-mod-page .streaming-playlist-workspace .playlist-detail-copy p,
+.echo-external-mod-page .streaming-playlist-workspace .playlist-detail-copy small,
+.echo-external-mod-page .streaming-playlist-page .playlist-detail-copy p,
+.echo-external-mod-page .streaming-playlist-page .playlist-detail-copy small {
+  text-shadow: none !important;
 }
 
 /* Album-detail quality control (body/page mounted; must not depend on playlist CSS). */
