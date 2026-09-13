@@ -26,8 +26,8 @@
   const paintPager = (host, pages, page, onPage) => {
     if (!host) return;
     host.replaceChildren();
-    host.hidden = pages <= 1;
-    if (pages <= 1) return;
+    host.hidden = false;
+    const total = Math.max(1, pages || 1);
     const add = (label, target, current) => {
       const button = document.createElement('button');
       button.type = 'button';
@@ -38,8 +38,8 @@
       host.append(button);
     };
     add('‹', page > 1 ? page - 1 : 0, false);
-    for (let n = 1; n <= pages; n += 1) add(String(n), n, n === page);
-    add('›', page < pages ? page + 1 : 0, false);
+    for (let n = 1; n <= total; n += 1) add(String(n), n, n === page);
+    add('›', page < total ? page + 1 : 0, false);
   };
   const assetUrl = (value) => {
     try { return new URL(String(value || ''), pageBase).href; } catch { return String(value || ''); }
@@ -516,13 +516,14 @@
     const recWrap = $('[data-recommend-wrap]');
     const recHost = $('[data-recommend]');
     const hideRec = Boolean(state.query.trim() || state.tag);
-    recWrap.hidden = hideRec || !rec.length;
-    const recPage = slicePage(hideRec ? [] : rec, state.recPage, 3);
+    const recPool = hideRec ? [] : state.mods.filter((item) => !item.unlisted);
+    recWrap.hidden = hideRec || !recPool.length;
+    const recPage = slicePage(recPool, state.recPage, 3);
     state.recPage = recPage.page;
     recHost.replaceChildren(...recPage.items.map((item) => card(item, '获取')));
     paintPager($('[data-recommend-pager]'), recPage.pages, recPage.page, (page) => { state.recPage = page; render(); });
     const items = filtered();
-    const listPage = slicePage(items, state.listPage, 9);
+    const listPage = slicePage(items, state.listPage, 6);
     state.listPage = listPage.page;
     $('[data-count]').textContent = String(items.length);
     const list = $('[data-list]');

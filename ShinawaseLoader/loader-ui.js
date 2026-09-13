@@ -1,6 +1,6 @@
-// Loader UI generation 53. Keep this guard in sync with
-// window.__echoExternalLoaderUi.version and ShinawaseLoader.mjs (uiVersion < 53).
-if (window.__echoExternalLoaderUi?.version >= 53) return 'already';
+// Loader UI generation 54. Keep this guard in sync with
+// window.__echoExternalLoaderUi.version and ShinawaseLoader.mjs (uiVersion < 54).
+if (window.__echoExternalLoaderUi?.version >= 54) return 'already';
 window.__echoExternalLoaderUi?.dispose?.();
 
 const base = 'http://127.0.0.1:' + LOADER_PORT;
@@ -1287,7 +1287,7 @@ css.textContent = `
   .echo-mod-list[data-layout="grid"] .echo-mod-row-actions { grid-column: 1 / -1; justify-content: flex-end; }
 
   .echo-mod-list[data-layout="store"] {
-    display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px;
+    display: grid !important; grid-template-columns: repeat(3, minmax(0, 1fr)) !important; gap: 14px;
   }
   .echo-store-card {
     display: flex; flex-direction: column; gap: 12px; min-width: 0; max-width: 100%; min-height: 168px;
@@ -1326,8 +1326,8 @@ css.textContent = `
   }
   .echo-store-ghost:hover { background: var(--shl-row-hover); }
   .echo-store-card .echo-market-action { min-height: 32px; border-radius: 8px; box-shadow: none; }
-  @media (max-width: 760px) {
-    .echo-mod-list[data-layout="store"] { grid-template-columns: minmax(0, 1fr); }
+  @media (max-width: 560px) {
+    .echo-mod-list[data-layout="store"] { grid-template-columns: minmax(0, 1fr) !important; }
   }
 
   /* ---- Keyframes ---- */
@@ -2943,27 +2943,20 @@ const sliceMarketPage = (items, page, size) => {
 const renderMarketPager = (pages, page, onPage) => {
   const nav = document.createElement('nav');
   nav.className = 'echo-store-pager';
-  if (pages <= 1) { nav.hidden = true; return nav; }
-  const add = (label, target, current) => {
+  const total = Math.max(1, pages || 1);
+  const current = Math.min(Math.max(1, page || 1), total);
+  const add = (label, target, isHere) => {
     const button = document.createElement('button');
     button.type = 'button';
     button.textContent = label;
-    if (current) button.classList.add('is-current');
-    if (!target || target === page) button.disabled = !current;
-    else button.onclick = () => onPage(target);
+    if (isHere) button.classList.add('is-current');
+    if (target && target !== current) button.onclick = () => onPage(target);
+    else button.disabled = !isHere;
     nav.append(button);
   };
-  add('‹', page > 1 ? page - 1 : 0, false);
-  const windowSize = 6;
-  let start = Math.max(1, page - 2);
-  let end = Math.min(pages, start + windowSize - 1);
-  start = Math.max(1, end - windowSize + 1);
-  if (start > 1) add('1', 1, page === 1);
-  if (start > 2) add('…', 0, false);
-  for (let n = start; n <= end; n += 1) add(String(n), n, n === page);
-  if (end < pages - 1) add('…', 0, false);
-  if (end < pages) add(String(pages), pages, page === pages);
-  add('›', page < pages ? page + 1 : 0, false);
+  add('‹', current > 1 ? current - 1 : 0, false);
+  for (let n = 1; n <= total; n += 1) add(String(n), n, n === current);
+  add('›', current < total ? current + 1 : 0, false);
   return nav;
 };
 const compareMarketItems = (left, right) => {
@@ -3129,7 +3122,7 @@ const renderMarketList = () => {
   const recWrap = marketPanel.querySelector('[data-recommend-wrap]');
   const recPager = marketPanel.querySelector('[data-recommend-pager]');
   const hideRec = Boolean(marketSearchQuery.trim() || marketTag || marketFilter !== 'all' || marketLoading || !marketCache.ok);
-  const recPool = hideRec ? [] : ((marketCache.recommended || []).length ? marketCache.recommended : all.filter((item) => !item.unlisted));
+  const recPool = hideRec ? [] : all.filter((item) => !item.unlisted);
   const recPage = sliceMarketPage(recPool, marketRecPage, 3);
   marketRecPage = recPage.page;
   if (recWrap) recWrap.hidden = recPool.length === 0;
@@ -3148,24 +3141,19 @@ const renderMarketList = () => {
     return;
   }
   const items = filteredMarketItems();
-  const listPage = sliceMarketPage(items, marketListPage, 9);
+  const listPage = sliceMarketPage(items, marketListPage, 6);
   marketListPage = listPage.page;
   const listPager = marketPanel.querySelector('[data-list-pager]');
   if (!items.length) {
     list.replaceChildren(renderMarketEmpty(all.length ? 'search' : 'empty'));
-    if (listPager) {
-      const next = renderMarketPager(1, 1, () => {});
-      next.setAttribute('data-list-pager', '');
-      next.hidden = true;
-      listPager.replaceWith(next);
-    }
   } else {
     list.replaceChildren(...listPage.items.map((item, index) => renderMarketCard(item, index, animate)));
-    if (listPager) {
-      const next = renderMarketPager(listPage.pages, listPage.page, (page) => { marketListPage = page; renderMarketList(); });
-      next.setAttribute('data-list-pager', '');
-      listPager.replaceWith(next);
-    }
+  }
+  if (listPager) {
+    const next = renderMarketPager(listPage.pages, listPage.page, (page) => { marketListPage = page; renderMarketList(); });
+    next.setAttribute('data-list-pager', '');
+    next.hidden = !items.length;
+    listPager.replaceWith(next);
   }
   const randomWrap = marketPanel.querySelector('[data-random-wrap]');
   const randomList = marketPanel.querySelector('[data-random-list]');
@@ -3581,9 +3569,9 @@ const openMarket = async () => {
       <section class="echo-recommend" data-recommend-wrap hidden>
         <div class="echo-recommend-head">
           <span class="section-kicker">${T.marketRecommend || 'Recommended'}</span>
-          <nav class="echo-store-pager" data-recommend-pager></nav>
         </div>
         <div class="echo-mod-list" data-recommend></div>
+        <nav class="echo-store-pager" data-recommend-pager></nav>
       </section>
       <div class="echo-mod-list" data-market-list></div>
       <nav class="echo-store-pager" data-list-pager></nav>
@@ -4051,7 +4039,7 @@ document.addEventListener('click', (event) => {
 }, true);
 
 window.__echoExternalLoaderUi = {
-  version: 53,
+  version: 54,
   registerSidebar,
   unregisterSidebar: removeSidebar,
   uiSettings: () => ({ ...uiSettings }),
