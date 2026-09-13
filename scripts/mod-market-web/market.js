@@ -163,33 +163,24 @@
   const card = (item, action) => {
     const official = item.channel === 'official';
     const el = document.createElement('article');
-    el.className = 'card';
-    appendIcon(el, item, 48);
+    el.className = 'card store-card';
+    const top = document.createElement('div');
+    top.className = 'store-top';
+    appendIcon(top, item, 56);
     const copy = document.createElement('div');
     copy.className = 'copy';
-    copy.innerHTML = '<h2></h2><p></p><div class="meta"></div>';
-    el.append(copy);
+    copy.innerHTML = '<h2></h2><div class="byline"></div><p></p>';
+    top.append(copy);
+    el.append(top);
     el.querySelector('h2').textContent = textOf(item, 'name') || item.id;
     el.querySelector('h2').onclick = () => void openDetail(item.id);
+    el.querySelector('.byline').textContent = (item.author || (official ? '官方' : '社区')) + '  ★ ' + formatCount(item.downloads) + '  ·  ' + formatCount(item.views);
     el.querySelector('p').textContent = textOf(item, 'description') || item.id;
-    const meta = el.querySelector('.meta');
-    const badges = [
-      [official ? '官方' : '社区', official ? 'official' : ''],
-      [item.unlisted ? '已下架' : '', 'unlisted'],
-      ['v' + (item.version || '1.0.0'), ''],
-      [formatBytes(item.size), ''],
-      [item.author || '', ''],
-      ['下载 ' + formatCount(item.downloads), ''],
-      ['浏览 ' + formatCount(item.views), ''],
-    ];
-    badges.filter((row) => row[0]).forEach(([label, cls]) => {
-      const badge = document.createElement('span');
-      badge.className = 'badge' + (cls ? ' ' + cls : '');
-      badge.textContent = label;
-      meta.append(badge);
-    });
     const actions = document.createElement('div');
     actions.className = 'card-actions';
+    const chip = document.createElement('span');
+    chip.className = 'badge' + (official ? ' official' : '');
+    chip.textContent = item.unlisted ? '已下架' : (official ? '官方' : '社区');
     const detail = document.createElement('button');
     detail.type = 'button';
     detail.className = 'btn ghost';
@@ -199,13 +190,13 @@
     link.className = 'get';
     link.href = assetUrl(item.file);
     link.download = '';
-    link.textContent = action || '下载';
+    link.textContent = action || '安装';
     link.addEventListener('click', () => {
       downloaded.add(item.id);
       localStorage.setItem('shinawase-market-downloaded', JSON.stringify([...downloaded]));
       void postEvent('download', item.id);
     });
-    actions.append(detail, link);
+    actions.append(chip, detail, link);
     el.append(actions);
     return el;
   };

@@ -1,6 +1,6 @@
-// Loader UI generation 50. Keep this guard in sync with
-// window.__echoExternalLoaderUi.version and ShinawaseLoader.mjs (uiVersion < 50).
-if (window.__echoExternalLoaderUi?.version >= 50) return 'already';
+// Loader UI generation 51. Keep this guard in sync with
+// window.__echoExternalLoaderUi.version and ShinawaseLoader.mjs (uiVersion < 51).
+if (window.__echoExternalLoaderUi?.version >= 51) return 'already';
 window.__echoExternalLoaderUi?.dispose?.();
 
 const base = 'http://127.0.0.1:' + LOADER_PORT;
@@ -1269,6 +1269,53 @@ css.textContent = `
   .echo-mod-list[data-layout="grid"] .echo-mod-icon { width: 40px; height: 40px; border-radius: 12px; font-size: 15px; }
   .echo-mod-list[data-layout="grid"] .echo-mod-copy strong { white-space: normal; }
   .echo-mod-list[data-layout="grid"] .echo-mod-row-actions { grid-column: 1 / -1; justify-content: flex-end; }
+
+  .echo-mod-list[data-layout="store"] {
+    display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px;
+  }
+  .echo-store-card {
+    display: flex; flex-direction: column; gap: 12px; min-width: 0; min-height: 168px;
+    padding: 16px; border: 1px solid color-mix(in srgb, var(--shl-border) 70%, transparent);
+    border-radius: 16px; background: var(--shl-panel);
+    box-shadow: 0 1px 2px rgba(16, 19, 24, 0.04);
+  }
+  .echo-store-card:hover {
+    transform: none; border-color: color-mix(in srgb, var(--shl-accent) 22%, var(--shl-border));
+    box-shadow: 0 10px 28px rgba(16, 19, 24, 0.08);
+  }
+  .echo-store-card[data-installed="true"], .echo-store-card[data-update="true"] {
+    background: var(--shl-panel);
+  }
+  .echo-store-top { display: grid; grid-template-columns: 56px minmax(0, 1fr); gap: 12px; align-items: start; }
+  .echo-store-card .echo-mod-icon { width: 56px; height: 56px; border-radius: 14px; font-size: 18px; }
+  .echo-store-body { min-width: 0; }
+  .echo-store-body strong { font-size: 15px; font-weight: 700; }
+  .echo-store-byline {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 4px;
+    color: var(--shl-muted); font-size: 12px;
+  }
+  .echo-store-body em {
+    display: -webkit-box; margin-top: 6px; white-space: normal; line-height: 1.45;
+    -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+  }
+  .echo-store-foot {
+    display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: auto;
+  }
+  .echo-store-foot .echo-mod-row-actions { margin-left: auto; }
+  .echo-store-ghost {
+    min-height: 32px; padding: 0 12px; border-radius: 8px;
+    border: 1px solid var(--shl-border); background: transparent; color: inherit;
+    font: 600 12.5px var(--shl-font); cursor: pointer; text-decoration: none;
+    display: inline-flex; align-items: center;
+  }
+  .echo-store-ghost:hover { background: var(--shl-row-hover); }
+  .echo-store-card .echo-market-action { min-height: 32px; border-radius: 8px; box-shadow: none; }
+  @media (max-width: 1180px) {
+    .echo-mod-list[data-layout="store"] { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  }
+  @media (max-width: 760px) {
+    .echo-mod-list[data-layout="store"] { grid-template-columns: minmax(0, 1fr); }
+  }
 
   /* ---- Keyframes ---- */
   @keyframes echoToastIn {
@@ -2876,14 +2923,14 @@ const compareMarketItems = (left, right) => {
 };
 const renderMarketCard = (item, index, animate) => {
   const card = document.createElement('article');
-  card.className = 'echo-mod-row';
+  card.className = 'echo-mod-row echo-store-card';
   card.dataset.installed = String(item.installed === true);
   card.dataset.update = String(item.updateAvailable === true);
   if (animate) {
     card.classList.add('is-entering');
     card.style.setProperty('--row-i', String(Math.min(index, 8)));
   }
-  card.innerHTML = '<span class="echo-mod-icon"></span><div class="echo-mod-copy"><strong></strong><em data-desc></em><div class="echo-mod-meta"><span class="echo-badge echo-badge-official" data-channel></span><span class="echo-badge echo-badge-version" data-version></span><span class="echo-badge" data-size></span><span class="echo-badge" data-downloads></span><span class="echo-badge" data-views></span><span class="echo-badge echo-badge-update" data-update-badge hidden></span></div></div><div class="echo-mod-row-actions"></div>';
+  card.innerHTML = '<div class="echo-store-top"><span class="echo-mod-icon"></span><div class="echo-store-body"><strong></strong><div class="echo-store-byline"></div><em data-desc></em></div></div><div class="echo-store-foot"><span class="echo-badge echo-badge-official" data-channel></span><div class="echo-mod-row-actions"></div></div>';
   const icon = card.querySelector('.echo-mod-icon');
   if (item.iconDataUrl || item.iconUrl) {
     const img = document.createElement('img');
@@ -2898,29 +2945,32 @@ const renderMarketCard = (item, index, animate) => {
   title.title = item.id;
   title.style.cursor = 'pointer';
   title.onclick = () => void openMarketDetail(item);
+  const byline = card.querySelector('.echo-store-byline');
+  const author = document.createElement('span');
+  author.textContent = item.author || item.channel || '';
+  const stats = document.createElement('span');
+  stats.textContent = '★ ' + formatCount(item.downloads) + '  ·  ' + formatCount(item.views);
+  byline.append(author, stats);
   const desc = card.querySelector('[data-desc]');
   desc.textContent = marketLocaleText(item, 'description') || item.id;
   desc.hidden = uiSettings.showModDescriptions === false;
   card.querySelector('[data-channel]').textContent = item.unlisted
     ? (T.marketUnlisted || 'Unlisted')
     : (item.channel === 'official' ? (T.marketOfficial || 'Official') : (T.marketCommunity || 'Community'));
-  const versionBadge = card.querySelector('[data-version]');
-  versionBadge.textContent = item.installed && item.installedVersion && item.installedVersion !== item.version
-    ? 'v' + item.installedVersion + ' → v' + item.version
-    : 'v' + (item.version || '1.0.0');
-  versionBadge.hidden = uiSettings.showModVersions === false;
-  card.querySelector('[data-size]').textContent = formatBytes(item.size);
-  card.querySelector('[data-downloads]').textContent = (T.marketDownloads || 'Downloads') + ' ' + formatCount(item.downloads);
-  card.querySelector('[data-views]').textContent = (T.marketViews || 'Views') + ' ' + formatCount(item.views);
-  const updateBadge = card.querySelector('[data-update-badge]');
-  updateBadge.textContent = T.updateMarket || 'Update';
-  updateBadge.hidden = !item.updateAvailable;
   const actions = card.querySelector('.echo-mod-row-actions');
+  if (item.homepage) {
+    const repo = document.createElement('a');
+    repo.className = 'echo-store-ghost';
+    repo.href = item.homepage;
+    repo.target = '_blank';
+    repo.rel = 'noopener';
+    repo.textContent = T.marketRepo || 'Repo';
+    actions.append(repo);
+  }
   const info = document.createElement('button');
   info.type = 'button';
-  info.className = 'echo-icon-btn';
-  info.title = T.marketDetails || T.marketIntro || 'About';
-  info.innerHTML = iconInfo;
+  info.className = 'echo-store-ghost';
+  info.textContent = T.marketIntro || T.marketDetails || 'About';
   info.onclick = () => void openMarketDetail(item);
   const busy = marketBusyId === item.id;
   const button = document.createElement('button');
@@ -3013,7 +3063,9 @@ const renderMarketList = () => {
   const animate = marketListAnimate;
   marketListAnimate = false;
   const list = marketPanel.querySelector('[data-market-list]');
-  list.dataset.layout = uiSettings.cardLayout === 'grid' ? 'grid' : 'list';
+  list.dataset.layout = 'store';
+  const recList = marketPanel.querySelector('[data-recommend]');
+  if (recList) recList.dataset.layout = 'store';
   const all = marketCache.mods || [];
   marketPanel.querySelector('[data-count-all]').textContent = String(all.length);
   marketPanel.querySelector('[data-count-updates]').textContent = String(all.filter((item) => item.updateAvailable).length);
@@ -3897,7 +3949,7 @@ document.addEventListener('click', (event) => {
 }, true);
 
 window.__echoExternalLoaderUi = {
-  version: 50,
+  version: 51,
   registerSidebar,
   unregisterSidebar: removeSidebar,
   uiSettings: () => ({ ...uiSettings }),
