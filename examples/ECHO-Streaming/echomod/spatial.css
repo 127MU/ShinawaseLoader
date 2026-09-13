@@ -55,9 +55,7 @@
   min-height: 100%;
 }
 
-.echo-external-mod-page .streaming-playlist-page .playlist-detail-panel,
-.echo-external-mod-page .streaming-playlist-page .playlist-detail-header,
-.echo-external-mod-page .streaming-playlist-page .playlist-detail-copy {
+.echo-external-mod-page .streaming-playlist-page .playlist-detail-panel {
   display: grid;
 }
 
@@ -87,18 +85,8 @@
   grid-template-rows: auto minmax(0, auto);
 }
 
-.echo-external-mod-page .streaming-playlist-page .playlist-cover {
-  display: grid;
-  aspect-ratio: 1;
-  overflow: hidden;
-  place-items: center;
-}
-
-.echo-external-mod-page .streaming-playlist-page .playlist-cover img,
-.echo-external-mod-page .streaming-playlist-page .playlist-detail-hero-art img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
+.echo-external-mod-page .streaming-playlist-page .playlist-detail-hero-art {
+  display: none !important;
 }
 
 .echo-external-mod-page .streaming-playlist-page .streaming-playlist-back {
@@ -119,11 +107,29 @@
   padding: 10px clamp(16px, 2vw, 28px) 28px;
 }
 
-.echo-external-mod-page .streaming-playlist-page .track-row {
+.echo-external-mod-page .streaming-playlist-page .track-row,
+.streaming-hub--spatial .streaming-playlist-workspace .track-row {
   display: grid;
-  grid-template-columns: 52px minmax(0, 1fr) 64px auto;
+  grid-template-columns: 40px minmax(0, 1fr) 52px auto;
   align-items: center;
-  gap: 14px;
+  gap: 10px;
+  min-width: 0;
+}
+
+.echo-external-mod-page .streaming-playlist-page .track-cover,
+.streaming-hub--spatial .streaming-playlist-workspace .track-cover {
+  width: 40px;
+  height: 40px;
+  overflow: hidden;
+  border-radius: 6px;
+}
+
+.echo-external-mod-page .streaming-playlist-page .track-cover img,
+.streaming-hub--spatial .streaming-playlist-workspace .track-cover img {
+  display: block;
+  width: 40px;
+  height: 40px;
+  object-fit: cover;
 }
 
 .echo-external-mod-page .streaming-playlist-page .track-main,
@@ -602,6 +608,74 @@
   min-width: 0;
   min-height: 0;
   overflow: auto;
+}
+
+.streaming-hub--spatial .streaming-playlist-workspace .playlist-detail-header,
+.echo-external-mod-page .streaming-playlist-page .playlist-detail-header {
+  display: grid;
+  grid-template-columns: 96px minmax(0, 1fr);
+  align-items: start;
+  gap: 12px 14px;
+  padding: 10px 16px 12px;
+  min-width: 0;
+}
+
+.streaming-hub--spatial .streaming-playlist-workspace .playlist-cover,
+.echo-external-mod-page .streaming-playlist-page .playlist-cover {
+  display: block;
+  width: 96px;
+  height: 96px;
+  flex: none;
+  overflow: hidden;
+  border-radius: 10px;
+  background: var(--theme-panel-bg-strong, rgba(0, 0, 0, 0.04));
+}
+
+.streaming-hub--spatial .streaming-playlist-workspace .playlist-cover img,
+.echo-external-mod-page .streaming-playlist-page .playlist-cover img {
+  display: block;
+  width: 96px;
+  height: 96px;
+  max-width: 96px;
+  max-height: 96px;
+  object-fit: cover;
+}
+
+.streaming-hub--spatial .streaming-playlist-workspace .playlist-detail-copy,
+.echo-external-mod-page .streaming-playlist-page .playlist-detail-copy {
+  display: grid;
+  align-content: start;
+  gap: 4px;
+  min-width: 0;
+}
+
+.streaming-hub--spatial .streaming-playlist-workspace .playlist-detail-copy h2,
+.echo-external-mod-page .streaming-playlist-page .playlist-detail-copy h2 {
+  margin: 0;
+  font-size: 18px;
+  line-height: 1.25;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.streaming-hub--spatial .streaming-playlist-workspace .playlist-detail-copy p,
+.streaming-hub--spatial .streaming-playlist-workspace .playlist-detail-copy small,
+.echo-external-mod-page .streaming-playlist-page .playlist-detail-copy p,
+.echo-external-mod-page .streaming-playlist-page .playlist-detail-copy small {
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.streaming-hub--spatial .streaming-playlist-workspace .playlist-detail-primary-actions,
+.echo-external-mod-page .streaming-playlist-page .playlist-detail-primary-actions {
+  margin-top: 6px;
+}
+
+.streaming-hub--spatial .streaming-playlist-workspace .playlist-detail-hero-art {
+  display: none !important;
 }
 
 .streaming-hub--spatial .streaming-playlist-workspace .playlist-empty-guide {

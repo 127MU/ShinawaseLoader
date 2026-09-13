@@ -920,7 +920,7 @@ const appendPlaylistTrackRow = (parent, track) => {
   });
   bindDetailTrack(row, track);
   const cover = make('div', 'track-cover');
-  appendNativeCover(cover, track.coverThumb || track.coverUrl || defaultCover, key, 96);
+  appendNativeCover(cover, track.coverThumb || track.coverUrl || defaultCover, key, 40);
   const main = make('div', 'track-main');
   const titleRow = make('div', 'track-title-row');
   if (current) titleRow.append(make('span', 'playing-dot'));
@@ -1004,8 +1004,13 @@ const renderPlaylistOverflow = (items) => {
   const menu = make('div', 'playlist-action-menu');
   menu.setAttribute('role', 'menu');
   menu.hidden = true;
+  const closeMenu = () => { menu.hidden = true; };
   const toggle = actionButton(copy.more, 'more', () => {
-    menu.hidden = !menu.hidden;
+    const open = menu.hidden;
+    menu.hidden = !open;
+    if (open) window.setTimeout(() => document.addEventListener('click', (event) => {
+      if (!wrap.contains(event.target)) closeMenu();
+    }, { once: true }), 0);
   }, { iconOnly: true, className: 'tool-button', title: copy.more, ariaLabel: copy.more });
   items.filter(Boolean).forEach((item) => {
     const button = make('button', 'playlist-action-menu-item');
@@ -1016,7 +1021,7 @@ const renderPlaylistOverflow = (items) => {
     if (item.disabled) button.disabled = true;
     button.addEventListener('click', (event) => {
       event.stopPropagation();
-      menu.hidden = true;
+      closeMenu();
       void Promise.resolve(item.onSelect?.()).catch(reportError);
     });
     menu.append(button);
@@ -1037,22 +1042,15 @@ const renderPlaylistDetail = () => {
   const daily = Boolean(playlist?.dailyKind || isVirtualDailyPlaylist(playlist));
   const panel = make('div', 'playlist-detail-panel');
   const header = make('header', 'playlist-detail-header');
-  header.dataset.hasArt = String(Boolean(playlist?.coverThumb || playlist?.coverUrl));
-  if (playlist?.coverThumb || playlist?.coverUrl) {
-    const art = make('div', 'playlist-detail-hero-art');
-    art.setAttribute('aria-hidden', 'true');
-    appendNativeCover(art, coverSrc, playlist?.id || playlist?.providerPlaylistId, 640);
-    header.append(art);
-  }
+  header.dataset.hasArt = 'false';
   const cover = make('div', 'playlist-cover');
-  appendNativeCover(cover, coverSrc, playlist?.id || playlist?.providerPlaylistId, 144);
+  appendNativeCover(cover, coverSrc, playlist?.id || playlist?.providerPlaylistId, 96);
   header.append(cover);
   const details = make('div', 'playlist-detail-copy');
   details.append(make('span', '', daily ? dailyKindLabel(playlist.dailyKind || playlist.kind) : copy.playlistKicker));
   details.append(make('h2', '', playlist?.title || playlist?.name || ''));
   details.append(make('p', '', playlist?.creator || playlist?.provider || ''));
   details.append(make('small', '', [playlist?.provider, formatTrackCount(tracks.length || playlist?.trackCount), formatAlbumDuration(tracks)].filter(Boolean).join(' · ')));
-  header.append(details);
   const actions = make('div', 'playlist-actions playlist-detail-primary-actions');
   actions.append(actionButton(state.playlistLoading ? copy.readingPlaylist : copy.playPlaylist, state.playlistLoading ? 'refresh' : 'play', handlePlayPlaylist, { className: 'primary-action', disabled: state.playlistLoading || !playable.length, title: copy.playPlaylist }));
   actions.append(actionButton(copy.addToQueue, 'list', handleQueuePlaylist, { className: 'secondary-action', disabled: !playable.length, title: copy.addToQueue }));
@@ -1089,7 +1087,8 @@ const renderPlaylistDetail = () => {
     });
   }
   actions.append(renderPlaylistOverflow(extras));
-  header.append(actions);
+  details.append(actions);
+  header.append(details);
   panel.append(header);
   if (state.playlistError) panel.append(make('p', 'playlist-detail-error', state.playlistError));
   if (state.playlistLoading && !tracks.length) panel.append(make('div', 'list-footer', chinese ? '正在读取歌单...' : 'Reading playlist...'));
