@@ -1286,7 +1286,7 @@ const renderMain = () => {
   if (!document.getElementById('streaming-recent-del-style')) {
     const recentStyle = make('style');
     recentStyle.id = 'streaming-recent-del-style';
-    recentStyle.textContent = '.streaming-recent-searches>div:first-child{display:flex;align-items:center}.streaming-recent-searches>div:first-child .streaming-recent-clear{margin-left:auto;margin-right:2px;cursor:pointer;opacity:.55;font-size:11px;user-select:none}.streaming-recent-searches>div:first-child .streaming-recent-clear:hover{opacity:1;color:#fca5a5}.streaming-recent-searches button{position:relative;padding-right:30px}.streaming-recent-searches .streaming-recent-del{position:absolute;right:9px;top:50%;transform:translateY(-50%);width:18px;height:18px;line-height:16px;text-align:center;border-radius:50%;opacity:0;cursor:pointer;font-size:13px;color:#cbd5e1;background:rgba(255,255,255,.08);transition:opacity .15s;user-select:none;z-index:2}.streaming-recent-searches button:hover .streaming-recent-del{opacity:.85}.streaming-recent-searches .streaming-recent-del:hover{opacity:1!important;background:rgba(248,113,113,.4);color:#fff}';
+    recentStyle.textContent = '.streaming-recent-searches>div:first-child{display:flex;align-items:center}.streaming-recent-searches>div:first-child .streaming-recent-clear{margin-left:auto;margin-right:2px;cursor:pointer;opacity:.55;font-size:11px;user-select:none}.streaming-recent-searches>div:first-child .streaming-recent-clear:hover{opacity:1}.streaming-recent-searches button{position:relative;padding-right:28px}.streaming-recent-searches .streaming-recent-del{position:absolute;right:8px;top:50%;transform:translateY(-50%);width:16px;height:16px;line-height:16px;text-align:center;border-radius:50%;opacity:0;cursor:pointer;font-size:12px;color:inherit;background:transparent;transition:opacity .15s;user-select:none;z-index:2}.streaming-recent-searches button:hover .streaming-recent-del{opacity:.7}.streaming-recent-searches .streaming-recent-del:hover{opacity:1!important}';
     document.head.append(recentStyle);
   }
   recentHeading.append(make('span', '', copy.recentSearches), make('small', '', String(state.recentSearches.length)), recentClear);
@@ -1314,21 +1314,7 @@ const renderMain = () => {
 
   const workspace = make('main', 'streaming-workspace');
   const hero = make('header', 'streaming-hero');
-  const heroCopy = make('div', 'streaming-hero-copy');
-  const kicker = make('span', 'streaming-kicker');
-  kicker.append(makeIcon('radio', 16), copy.streaming);
-  heroCopy.append(kicker, make('h1', '', copy.streamingTitle), make('p', '', copy.streamingDescription));
-  hero.append(heroCopy);
-  const providerTabs = make('div', 'streaming-provider-tabs');
-  providerTabs.setAttribute('aria-label', copy.providers);
-  state.providers.forEach((provider) => {
-    const tab = make('span');
-    tab.dataset.active = String(provider.name === state.provider);
-    tab.dataset.disabled = String(!provider.enabled);
-    tab.append(make('span', '', provider.displayName || provider.name));
-    providerTabs.append(tab);
-  });
-  hero.append(providerTabs);
+  hero.append(make('h1', '', copy.streamingTitle));
   workspace.append(hero);
 
   const command = make('section', 'streaming-command-panel');
