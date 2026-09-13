@@ -814,7 +814,7 @@ const loadSelected = async (options = {}) => {
   const requestId = ++state.requestId;
   if (!options.preserveCurrent) state.selectedVideo = null;
   state.isLoading = Boolean(state.trackId);
-  state.error = null;
+  if (!options.preserveCurrent) state.error = null;
   state.videoError = false;
   if (!state.trackId) {
     state.isLoading = false;
@@ -832,6 +832,7 @@ const loadSelected = async (options = {}) => {
     }
     const effectiveId = snapshotTrackIdFor(state.currentTrack, state.trackId) || state.trackId;
     let video = await mvApi.getSelected(effectiveId);
+    if (!video && state.trackId && state.trackId !== effectiveId) video = await mvApi.getSelected(state.trackId);
     const canReuseSelected = Boolean(
       video
       && (
@@ -871,7 +872,12 @@ const loadSelected = async (options = {}) => {
       resolved = await resolveNetworkVideo(video);
     }
     if (state.requestId !== requestId) return;
-    state.selectedVideo = resolved;
+    if (resolved) {
+      state.selectedVideo = resolved;
+      state.error = null;
+    } else if (!options.preserveCurrent) {
+      state.selectedVideo = null;
+    }
   } catch (error) {
     if (state.requestId !== requestId) return;
     if (isMvDatabaseError(error)) {
@@ -2241,7 +2247,8 @@ const onSettingsChanged = (event) => {
 
 const onMvChanged = (event) => {
   const trackId = event instanceof CustomEvent ? event.detail?.trackId : null;
-  if (!trackId || trackId === state.trackId) void loadSelected({ preserveCurrent: true });
+  const activeId = snapshotTrackIdFor(state.currentTrack, state.trackId);
+  if (!trackId || trackId === state.trackId || trackId === activeId) void loadSelected({ preserveCurrent: true });
 };
 
 const onCandidatesChanged = (event) => {

@@ -14,7 +14,7 @@ const { stat } = require('node:fs/promises');
 const { basename, dirname, extname, join, resolve, normalize } = require('node:path');
 const { Readable } = require('node:stream');
 
-const MOD_VERSION = '1.0.17';
+const MOD_VERSION = '1.0.18';
 const MV_MATCH_ALGORITHM_VERSION = 5;
 const MV_AUTO_MATCH_THRESHOLD = 0.7;
 const MV_AUTO_MATCH_MIN_MARGIN = 0.08;
@@ -2419,8 +2419,12 @@ function createEngine(options = {}) {
       if (!row || row.trackId !== trackId) throw new Error(`Unknown MV candidate ${videoId}`);
       const provider = providerName(row.provider);
       if (provider !== 'local' && row.sourceType === 'search_candidate') {
-        const resolved = await resolvePlayableCandidateForSelection(videoId);
-        if (!resolved.video.playableInApp || !resolved.video.mediaUrl) throw new Error(IN_APP_UNAVAILABLE);
+        try {
+          const resolved = await resolvePlayableCandidateForSelection(videoId);
+          if (resolved.video.playableInApp && resolved.video.mediaUrl) return commitSelectedVideo(trackId, videoId, 'manual');
+        } catch (error) {
+          log('WARN', `mv: select resolve failed (${error instanceof Error ? error.message : String(error)})`);
+        }
       }
       return commitSelectedVideo(trackId, videoId, 'manual');
     },
