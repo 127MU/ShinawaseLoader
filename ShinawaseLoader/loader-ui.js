@@ -1,6 +1,6 @@
-// Loader UI generation 51. Keep this guard in sync with
-// window.__echoExternalLoaderUi.version and ShinawaseLoader.mjs (uiVersion < 51).
-if (window.__echoExternalLoaderUi?.version >= 51) return 'already';
+// Loader UI generation 52. Keep this guard in sync with
+// window.__echoExternalLoaderUi.version and ShinawaseLoader.mjs (uiVersion < 52).
+if (window.__echoExternalLoaderUi?.version >= 52) return 'already';
 window.__echoExternalLoaderUi?.dispose?.();
 
 const base = 'http://127.0.0.1:' + LOADER_PORT;
@@ -62,6 +62,7 @@ let marketSearchQuery = '';
 let marketFilter = 'all';
 let marketTag = '';
 let marketCache = { ok: true, mods: [], recommended: [], tags: [], error: '', updatedAt: null };
+let marketRandomPick = [];
 let marketBusyId = '';
 let marketListAnimate = true;
 let marketLoading = false;
@@ -2912,6 +2913,16 @@ const syncMarketToolbar = () => {
     chip.classList.toggle('active', chip.dataset.marketFilter === marketFilter);
   });
 };
+const shuffleMarketMods = (count) => {
+  const pool = [...(marketCache.mods || [])].filter((item) => !item.unlisted);
+  for (let i = pool.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(Math.random() * (i + 1));
+    const swap = pool[i];
+    pool[i] = pool[j];
+    pool[j] = swap;
+  }
+  return pool.slice(0, Math.min(count, pool.length));
+};
 const compareMarketItems = (left, right) => {
   const leftScore = marketSearchScore(left, marketSearchQuery);
   const rightScore = marketSearchScore(right, marketSearchQuery);
@@ -2930,7 +2941,7 @@ const renderMarketCard = (item, index, animate) => {
     card.classList.add('is-entering');
     card.style.setProperty('--row-i', String(Math.min(index, 8)));
   }
-  card.innerHTML = '<div class="echo-store-top"><span class="echo-mod-icon"></span><div class="echo-store-body"><strong></strong><div class="echo-store-byline"></div><em data-desc></em></div></div><div class="echo-store-foot"><span class="echo-badge echo-badge-official" data-channel></span><div class="echo-mod-row-actions"></div></div>';
+  card.innerHTML = '<div class="echo-store-top"><span class="echo-mod-icon"></span><div class="echo-store-body"><strong></strong><div class="echo-store-byline"></div><em data-desc></em></div></div><div class="echo-store-foot"><div class="echo-mod-row-actions"></div></div>';
   const icon = card.querySelector('.echo-mod-icon');
   if (item.iconDataUrl || item.iconUrl) {
     const img = document.createElement('img');
@@ -2947,16 +2958,13 @@ const renderMarketCard = (item, index, animate) => {
   title.onclick = () => void openMarketDetail(item);
   const byline = card.querySelector('.echo-store-byline');
   const author = document.createElement('span');
-  author.textContent = item.author || item.channel || '';
+  author.textContent = item.author || '';
   const stats = document.createElement('span');
   stats.textContent = '★ ' + formatCount(item.downloads) + '  ·  ' + formatCount(item.views);
   byline.append(author, stats);
   const desc = card.querySelector('[data-desc]');
   desc.textContent = marketLocaleText(item, 'description') || item.id;
   desc.hidden = uiSettings.showModDescriptions === false;
-  card.querySelector('[data-channel]').textContent = item.unlisted
-    ? (T.marketUnlisted || 'Unlisted')
-    : (item.channel === 'official' ? (T.marketOfficial || 'Official') : (T.marketCommunity || 'Community'));
   const actions = card.querySelector('.echo-mod-row-actions');
   if (item.homepage) {
     const repo = document.createElement('a');
@@ -3092,9 +3100,20 @@ const renderMarketList = () => {
   const items = filteredMarketItems().filter((item) => !recIds.has(item.id));
   if (!items.length) {
     list.replaceChildren(renderMarketEmpty(all.length ? 'search' : 'empty'));
-    return;
+  } else {
+    list.replaceChildren(...items.map((item, index) => renderMarketCard(item, index, animate)));
   }
-  list.replaceChildren(...items.map((item, index) => renderMarketCard(item, index, animate)));
+  const randomWrap = marketPanel.querySelector('[data-random-wrap]');
+  const randomList = marketPanel.querySelector('[data-random-list]');
+  const hideRandom = hideRec || !all.length;
+  if (randomList) randomList.dataset.layout = 'store';
+  if (hideRandom) {
+    if (randomWrap) randomWrap.hidden = true;
+  } else {
+    if (!marketRandomPick.length) marketRandomPick = shuffleMarketMods(3);
+    if (randomWrap) randomWrap.hidden = marketRandomPick.length === 0;
+    if (randomList) randomList.replaceChildren(...marketRandomPick.map((item, index) => renderMarketCard(item, index, false)));
+  }
 };
 const setMarketLoginOpen = (open) => {
   const overlay = marketPanel?.querySelector('[data-login-overlay]');
@@ -3158,6 +3177,7 @@ const loadMarket = async (force = false) => {
     marketUser = me.user || null;
     syncMarketAccount();
     const result = await api('/api/market' + (force ? '?force=1' : ''));
+    if (force) marketRandomPick = [];
     marketCache = {
       ok: result.ok !== false,
       mods: Array.isArray(result.mods) ? result.mods : [],
@@ -3502,6 +3522,13 @@ const openMarket = async () => {
         <div class="echo-mod-list" data-recommend></div>
       </section>
       <div class="echo-mod-list" data-market-list></div>
+      <section class="echo-recommend" data-random-wrap hidden>
+        <div class="echo-recommend-head">
+          <span class="section-kicker">${T.marketRandom || '随机插件'}</span>
+          <button class="echo-store-ghost" type="button" data-random-shuffle>${T.marketRandomOnce || '随机一发'}</button>
+        </div>
+        <div class="echo-mod-list" data-random-list></div>
+      </section>
       </div>
       <div data-market-manage hidden>
         <header class="echo-mod-header">
@@ -3553,6 +3580,10 @@ const openMarket = async () => {
     };
   });
   marketPanel.querySelector('[data-action="refresh"]').onclick = () => void loadMarket(true);
+  marketPanel.querySelector('[data-random-shuffle]')?.addEventListener('click', () => {
+    marketRandomPick = shuffleMarketMods(3);
+    renderMarketList();
+  });
   marketPanel.querySelector('[data-action="manage"]').onclick = () => showMarketManage(true);
   marketPanel.querySelector('[data-manage-back]').onclick = () => showMarketManage(false);
   marketPanel.querySelector('[data-open-login]').onclick = () => setMarketLoginOpen(true);
@@ -3949,7 +3980,7 @@ document.addEventListener('click', (event) => {
 }, true);
 
 window.__echoExternalLoaderUi = {
-  version: 51,
+  version: 52,
   registerSidebar,
   unregisterSidebar: removeSidebar,
   uiSettings: () => ({ ...uiSettings }),

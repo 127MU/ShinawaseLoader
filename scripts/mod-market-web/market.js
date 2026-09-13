@@ -7,7 +7,17 @@
   };
   const downloaded = new Set(readJson(localStorage.getItem('shinawase-market-downloaded') || '[]', []));
   const viewed = new Set(readJson(sessionStorage.getItem('shinawase-market-viewed') || '[]', []));
-  const state = { mods: [], query: '', tag: '', updatedAt: '', detail: null, user: null, manageOpen: '', manageScope: 'mine' };
+  const state = { mods: [], query: '', tag: '', updatedAt: '', detail: null, user: null, manageOpen: '', manageScope: 'mine', randomPick: null };
+  const shuffleMods = (count) => {
+    const pool = state.mods.filter((item) => !item.unlisted);
+    for (let i = pool.length - 1; i > 0; i -= 1) {
+      const j = Math.floor(Math.random() * (i + 1));
+      const swap = pool[i];
+      pool[i] = pool[j];
+      pool[j] = swap;
+    }
+    return pool.slice(0, Math.min(count, pool.length));
+  };
   const assetUrl = (value) => {
     try { return new URL(String(value || ''), pageBase).href; } catch { return String(value || ''); }
   };
@@ -161,7 +171,6 @@
     host.append(fallback);
   };
   const card = (item, action) => {
-    const official = item.channel === 'official';
     const el = document.createElement('article');
     el.className = 'card store-card';
     const top = document.createElement('div');
@@ -174,13 +183,10 @@
     el.append(top);
     el.querySelector('h2').textContent = textOf(item, 'name') || item.id;
     el.querySelector('h2').onclick = () => void openDetail(item.id);
-    el.querySelector('.byline').textContent = (item.author || (official ? '官方' : '社区')) + '  ★ ' + formatCount(item.downloads) + '  ·  ' + formatCount(item.views);
+    el.querySelector('.byline').textContent = (item.author || '') + '  ★ ' + formatCount(item.downloads) + '  ·  ' + formatCount(item.views);
     el.querySelector('p').textContent = textOf(item, 'description') || item.id;
     const actions = document.createElement('div');
     actions.className = 'card-actions';
-    const chip = document.createElement('span');
-    chip.className = 'badge' + (official ? ' official' : '');
-    chip.textContent = item.unlisted ? '已下架' : (official ? '官方' : '社区');
     const detail = document.createElement('button');
     detail.type = 'button';
     detail.className = 'btn ghost';
@@ -196,7 +202,7 @@
       localStorage.setItem('shinawase-market-downloaded', JSON.stringify([...downloaded]));
       void postEvent('download', item.id);
     });
-    actions.append(chip, detail, link);
+    actions.append(detail, link);
     el.append(actions);
     return el;
   };
@@ -496,6 +502,15 @@
     const list = $('[data-list]');
     if (!items.length) list.replaceChildren(empty('没有匹配的插件', '试试其他关键词或标签。'));
     else list.replaceChildren(...items.map((item) => card(item)));
+    const randomWrap = $('[data-random-wrap]');
+    const randomHost = $('[data-random]');
+    if (hideRec || !state.mods.length) {
+      if (randomWrap) randomWrap.hidden = true;
+    } else {
+      if (!state.randomPick) state.randomPick = shuffleMods(3);
+      if (randomWrap) randomWrap.hidden = !state.randomPick.length;
+      if (randomHost) randomHost.replaceChildren(...state.randomPick.map((item) => card(item)));
+    }
     $('[data-footer]').textContent = `${state.mods.length} 个插件` + (state.updatedAt ? ' · 更新于 ' + state.updatedAt : '');
     $('[data-search-clear]').hidden = !state.query;
   };
@@ -576,6 +591,11 @@
     if (back) back.addEventListener('click', (event) => {
       event.preventDefault();
       showView('market');
+    });
+    const shuffle = $('[data-random-shuffle]');
+    if (shuffle) shuffle.addEventListener('click', () => {
+      state.randomPick = shuffleMods(3);
+      render();
     });
     const loginLink = $('[data-login-link]');
     const loginOverlay = $('[data-login-overlay]');

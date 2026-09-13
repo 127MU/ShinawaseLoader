@@ -197,7 +197,7 @@ h2 { margin: 0; font-size: 16px; font-weight: 800; font-family: var(--echo-displ
   background: rgba(30, 42, 102, 0.08);
   font-size: 11px;
 }
-[data-list], [data-recommend] {
+[data-list], [data-recommend], [data-random] {
   display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px;
 }
 .card, .store-card {
@@ -317,10 +317,10 @@ h2 { margin: 0; font-size: 16px; font-weight: 800; font-family: var(--echo-displ
 .key-box code { font: 800 12px ui-monospace, Consolas, monospace; word-break: break-all; }
 footer[data-footer] { margin-top: 28px; color: var(--muted); font-size: 12px; font-family: var(--echo-display); }
 @media (max-width: 980px) {
-  [data-list], [data-recommend] { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  [data-list], [data-recommend], [data-random] { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (max-width: 640px) {
-  [data-list], [data-recommend] { grid-template-columns: minmax(0, 1fr); }
+  [data-list], [data-recommend], [data-random] { grid-template-columns: minmax(0, 1fr); }
   .hub-bar-inner { flex-wrap: wrap; padding: 8px 0; }
 }
 @media (prefers-reduced-motion: reduce) {
