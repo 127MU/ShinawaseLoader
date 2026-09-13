@@ -78,7 +78,7 @@ const readChoice = (items, hint) => new Promise((resolve) => {
 });
 
 const loaderDir = dirname(fileURLToPath(import.meta.url));
-const loaderVersion = '1.7.0';
+const loaderVersion = '1.7.1';
 const DEFAULT_MARKET_CATALOG_URL = 'https://echo.shiinasuki.com/mod-market/index.json';
 // Last verified Steam host. Do not treat FileVersion as an Electron ABI.
 // Isolated runtime tracks the installed asar/exe via runtime-sync.mjs.
@@ -2711,11 +2711,19 @@ const printList = () => {
 };
 
 const UPDATE_SKIP = new Set(['node.exe', 'node_modules', 'logs', 'backups', 'modded-runtime', 'loader-state.json', 'loader.config.json', 'loader-debug.log', '.git', '.processed']);
-const UPDATE_REPO = 'https://raw.githubusercontent.com/ChunchunOwO/ShinawaseLoader/main';
-const UPDATE_ARCHIVE = 'https://github.com/ChunchunOwO/ShinawaseLoader/archive/refs/heads/main.zip';
+const UPDATE_REPO = 'ChunchunOwO/ShinawaseLoader';
+const UPDATE_JSON_BASES = [
+  `https://raw.githubusercontent.com/${UPDATE_REPO}/main`,
+  `https://cdn.jsdelivr.net/gh/${UPDATE_REPO}@main`,
+];
+const UPDATE_ARCHIVE_URLS = [
+  `https://codeload.github.com/${UPDATE_REPO}/zip/refs/heads/main`,
+  `https://github.com/${UPDATE_REPO}/archive/refs/heads/main.zip`,
+];
 const UPDATE_PACKAGES = [
-  { id: 'echo.community-streaming', manifest: `${UPDATE_REPO}/examples/ECHO-Streaming/echomod/echo.mod.json`, file: `${UPDATE_REPO}/examples/packages/ECHO-Streaming.echomod` },
-  { id: 'echo.mv', manifest: `${UPDATE_REPO}/examples/ECHO-MV/echomod/echo.mod.json`, file: `${UPDATE_REPO}/examples/packages/ECHO-MV.echomod` },
+  { id: 'echo.community-streaming', manifest: 'examples/ECHO-Streaming/echomod/echo.mod.json', file: 'examples/packages/ECHO-Streaming.echomod' },
+  { id: 'echo.mv', manifest: 'examples/ECHO-MV/echomod/echo.mod.json', file: 'examples/packages/ECHO-MV.echomod' },
+  { id: 'echo.lyrics-match-whitebox', manifest: 'examples/ECHO-LyricsMatchWhitebox/echomod/echo.mod.json', file: 'examples/packages/ECHO-LyricsMatchWhitebox.echomod' },
 ];
 const updateStampPath = join(logsRoot, 'last-self-update.json');
 const compareVersions = (left, right) => {
@@ -2729,26 +2737,36 @@ const compareVersions = (left, right) => {
   }
   return 0;
 };
-const fetchUpdateJson = async (url, timeoutMs = 12000) => {
+const fetchUpdateOnce = async (url, timeoutMs, asJson) => {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const response = await fetch(url, { signal: controller.signal, headers: { 'user-agent': `ShinawaseLoader/${loaderVersion}` } });
     if (!response.ok) throw new Error(`http_${response.status}`);
-    return await response.json();
+    return asJson ? await response.json() : Buffer.from(await response.arrayBuffer());
   } finally { clearTimeout(timer); }
 };
-const fetchUpdateBuffer = async (url, timeoutMs = 120000) => {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    const response = await fetch(url, { signal: controller.signal, headers: { 'user-agent': `ShinawaseLoader/${loaderVersion}` } });
-    if (!response.ok) throw new Error(`http_${response.status}`);
-    return Buffer.from(await response.arrayBuffer());
-  } finally { clearTimeout(timer); }
+const fetchUpdateJson = async (path, timeoutMs = 15000) => {
+  let lastError;
+  for (const base of UPDATE_JSON_BASES) {
+    try { return await fetchUpdateOnce(`${base}/${path}`, timeoutMs, true); }
+    catch (error) { lastError = error; }
+  }
+  throw lastError || new Error('update_unreachable');
+};
+const fetchUpdateBuffer = async (pathOrUrl, timeoutMs = 120000) => {
+  const urls = /^https?:/i.test(pathOrUrl)
+    ? [pathOrUrl]
+    : UPDATE_JSON_BASES.map((base) => `${base}/${pathOrUrl}`);
+  let lastError;
+  for (const url of urls) {
+    try { return await fetchUpdateOnce(url, timeoutMs, false); }
+    catch (error) { lastError = error; }
+  }
+  throw lastError || new Error('update_unreachable');
 };
 const checkSelfUpdate = async () => {
-  const remoteLoader = await fetchUpdateJson(`${UPDATE_REPO}/ShinawaseLoader/loader-version.json`);
+  const remoteLoader = await fetchUpdateJson('ShinawaseLoader/loader-version.json');
   const remote = String(remoteLoader?.version || '');
   const packages = [];
   for (const item of UPDATE_PACKAGES) {
@@ -2781,9 +2799,13 @@ const applySelfUpdate = async (options = {}) => {
   const force = options.force === true;
   const auto = options.auto === true;
   const config = readJson(loaderConfigPath, loaderConfig);
-  if (auto && config.autoUpdate === false) return { ok: true, skipped: 'disabled', local: loaderVersion };
+  if (auto && config.autoUpdate === false) {
+    log('INFO', 'self-update skipped: disabled');
+    return { ok: true, skipped: 'disabled', local: loaderVersion };
+  }
   const stamp = readJson(updateStampPath, {});
   if (auto && !force && Number(stamp.checkedAt) && Date.now() - Number(stamp.checkedAt) < 10 * 60 * 1000) {
+    log('INFO', 'self-update skipped: checked recently');
     return { ok: true, skipped: 'recent', local: loaderVersion, remote: stamp.remote || null };
   }
   let status;
@@ -2791,15 +2813,24 @@ const applySelfUpdate = async (options = {}) => {
     status = await checkSelfUpdate();
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    if (!quiet) log('WARN', `self-update check failed: ${message}`);
+    log('WARN', `self-update check failed: ${message}`);
     return { ok: false, local: loaderVersion, error: message };
   }
-  writeJson(updateStampPath, { checkedAt: Date.now(), local: loaderVersion, remote: status.remote });
-  if (!status.updateAvailable) return { ok: true, updated: false, ...status };
+  if (!status.updateAvailable) {
+    writeJson(updateStampPath, { checkedAt: Date.now(), local: loaderVersion, remote: status.remote });
+    log('INFO', `self-update idle local=${loaderVersion} remote=${status.remote}`);
+    return { ok: true, updated: false, ...status };
+  }
   const applied = [];
   try {
     if (status.loaderUpdate) {
-      const archive = await fetchUpdateBuffer(UPDATE_ARCHIVE);
+      let archive;
+      let lastError;
+      for (const url of UPDATE_ARCHIVE_URLS) {
+        try { archive = await fetchUpdateBuffer(url); break; }
+        catch (error) { lastError = error; }
+      }
+      if (!archive) throw lastError || new Error('update_archive_unreachable');
       const files = readZip(archive, { maxEntries: 20000, maxBytes: 256 * 1024 * 1024 });
       for (const file of files) {
         const normalized = String(file.path || '').replaceAll('\\', '/');
@@ -2837,6 +2868,7 @@ const applySelfUpdate = async (options = {}) => {
     log('WARN', `self-update apply failed: ${message}`);
     return { ok: false, local: loaderVersion, remote: status.remote, applied, error: message };
   }
+  writeJson(updateStampPath, { checkedAt: Date.now(), local: loaderVersion, remote: status.remote, applied });
   return {
     ok: true,
     updated: applied.length > 0,
