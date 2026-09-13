@@ -1,6 +1,6 @@
-// Loader UI generation 52. Keep this guard in sync with
-// window.__echoExternalLoaderUi.version and ShinawaseLoader.mjs (uiVersion < 52).
-if (window.__echoExternalLoaderUi?.version >= 52) return 'already';
+// Loader UI generation 53. Keep this guard in sync with
+// window.__echoExternalLoaderUi.version and ShinawaseLoader.mjs (uiVersion < 53).
+if (window.__echoExternalLoaderUi?.version >= 53) return 'already';
 window.__echoExternalLoaderUi?.dispose?.();
 
 const base = 'http://127.0.0.1:' + LOADER_PORT;
@@ -63,6 +63,8 @@ let marketFilter = 'all';
 let marketTag = '';
 let marketCache = { ok: true, mods: [], recommended: [], tags: [], error: '', updatedAt: null };
 let marketRandomPick = [];
+let marketRecPage = 1;
+let marketListPage = 1;
 let marketBusyId = '';
 let marketListAnimate = true;
 let marketLoading = false;
@@ -654,8 +656,21 @@ css.textContent = `
   .echo-search-suggest small { color: var(--shl-subtle); font: 500 11px var(--shl-mono); }
   .echo-recommend { display: flex; flex-direction: column; gap: 10px; }
   .echo-recommend[hidden] { display: none !important; }
-  .echo-recommend-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
-  .echo-recommend-head p { margin: 0; color: var(--shl-muted); font-size: 12.5px; }
+  .echo-recommend-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-width: 0; }
+  .echo-recommend-head p { display: none; }
+  .echo-store-pager {
+    display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 6px;
+    padding: 14px 0 4px;
+  }
+  .echo-store-pager button {
+    min-width: 32px; height: 32px; padding: 0 8px; border: 0; border-radius: 8px;
+    background: transparent; color: inherit; font: 650 13px var(--shl-font); cursor: pointer;
+  }
+  .echo-store-pager button:hover:not(:disabled) { background: var(--shl-row-hover); }
+  .echo-store-pager button.is-current {
+    background: color-mix(in srgb, var(--shl-muted) 16%, transparent); cursor: default;
+  }
+  .echo-store-pager button:disabled { opacity: 0.35; cursor: default; }
   .echo-mod-list[data-recommend] { margin-bottom: 4px; }
   .echo-tag-row { display: flex; flex-wrap: wrap; gap: 8px; }
   .echo-market-login, .echo-market-account {
@@ -1275,7 +1290,7 @@ css.textContent = `
     display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px;
   }
   .echo-store-card {
-    display: flex; flex-direction: column; gap: 12px; min-width: 0; min-height: 168px;
+    display: flex; flex-direction: column; gap: 12px; min-width: 0; max-width: 100%; min-height: 168px;
     padding: 16px; border: 1px solid color-mix(in srgb, var(--shl-border) 70%, transparent);
     border-radius: 16px; background: var(--shl-panel);
     box-shadow: 0 1px 2px rgba(16, 19, 24, 0.04);
@@ -1311,9 +1326,6 @@ css.textContent = `
   }
   .echo-store-ghost:hover { background: var(--shl-row-hover); }
   .echo-store-card .echo-market-action { min-height: 32px; border-radius: 8px; box-shadow: none; }
-  @media (max-width: 1180px) {
-    .echo-mod-list[data-layout="store"] { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  }
   @media (max-width: 760px) {
     .echo-mod-list[data-layout="store"] { grid-template-columns: minmax(0, 1fr); }
   }
@@ -2923,6 +2935,37 @@ const shuffleMarketMods = (count) => {
   }
   return pool.slice(0, Math.min(count, pool.length));
 };
+const sliceMarketPage = (items, page, size) => {
+  const pages = Math.max(1, Math.ceil((items.length || 0) / size) || 1);
+  const current = Math.min(Math.max(1, page || 1), pages);
+  return { page: current, pages, items: items.slice((current - 1) * size, current * size) };
+};
+const renderMarketPager = (pages, page, onPage) => {
+  const nav = document.createElement('nav');
+  nav.className = 'echo-store-pager';
+  if (pages <= 1) { nav.hidden = true; return nav; }
+  const add = (label, target, current) => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.textContent = label;
+    if (current) button.classList.add('is-current');
+    if (!target || target === page) button.disabled = !current;
+    else button.onclick = () => onPage(target);
+    nav.append(button);
+  };
+  add('‹', page > 1 ? page - 1 : 0, false);
+  const windowSize = 6;
+  let start = Math.max(1, page - 2);
+  let end = Math.min(pages, start + windowSize - 1);
+  start = Math.max(1, end - windowSize + 1);
+  if (start > 1) add('1', 1, page === 1);
+  if (start > 2) add('…', 0, false);
+  for (let n = start; n <= end; n += 1) add(String(n), n, n === page);
+  if (end < pages - 1) add('…', 0, false);
+  if (end < pages) add(String(pages), pages, page === pages);
+  add('›', page < pages ? page + 1 : 0, false);
+  return nav;
+};
 const compareMarketItems = (left, right) => {
   const leftScore = marketSearchScore(left, marketSearchQuery);
   const rightScore = marketSearchScore(right, marketSearchQuery);
@@ -3023,7 +3066,7 @@ const renderMarketTags = () => {
   all.dataset.marketTag = '';
   all.innerHTML = (T.marketAllTags || T.filterAll) + '<span class="echo-filter-count"></span>';
   all.querySelector('.echo-filter-count').textContent = String((marketCache.mods || []).length);
-  all.onclick = () => { marketTag = ''; renderMarketList(); };
+  all.onclick = () => { marketTag = ''; marketListPage = 1; marketRecPage = 1; renderMarketList(); };
   const chips = [...counts.entries()].sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0])).map(([tag, count]) => {
     const chip = document.createElement('button');
     chip.type = 'button';
@@ -3031,7 +3074,7 @@ const renderMarketTags = () => {
     chip.innerHTML = '<span></span><span class="echo-filter-count"></span>';
     chip.querySelector('span').textContent = tag;
     chip.querySelector('.echo-filter-count').textContent = String(count);
-    chip.onclick = () => { marketTag = marketTag === tag ? '' : tag; renderMarketList(); };
+    chip.onclick = () => { marketTag = marketTag === tag ? '' : tag; marketListPage = 1; marketRecPage = 1; renderMarketList(); };
     return chip;
   });
   host.replaceChildren(all, ...chips);
@@ -3084,10 +3127,18 @@ const renderMarketList = () => {
   renderMarketSuggest();
   const recHost = marketPanel.querySelector('[data-recommend]');
   const recWrap = marketPanel.querySelector('[data-recommend-wrap]');
+  const recPager = marketPanel.querySelector('[data-recommend-pager]');
   const hideRec = Boolean(marketSearchQuery.trim() || marketTag || marketFilter !== 'all' || marketLoading || !marketCache.ok);
-  const rec = hideRec ? [] : (marketCache.recommended || []);
-  if (recWrap) recWrap.hidden = rec.length === 0;
-  if (recHost) recHost.replaceChildren(...rec.map((item, index) => renderMarketCard(item, index, animate)));
+  const recPool = hideRec ? [] : ((marketCache.recommended || []).length ? marketCache.recommended : all.filter((item) => !item.unlisted));
+  const recPage = sliceMarketPage(recPool, marketRecPage, 3);
+  marketRecPage = recPage.page;
+  if (recWrap) recWrap.hidden = recPool.length === 0;
+  if (recHost) recHost.replaceChildren(...recPage.items.map((item, index) => renderMarketCard(item, index, animate)));
+  if (recPager) {
+    const next = renderMarketPager(recPage.pages, recPage.page, (page) => { marketRecPage = page; renderMarketList(); });
+    next.setAttribute('data-recommend-pager', '');
+    recPager.replaceWith(next);
+  }
   if (marketLoading) {
     renderMarketSkeleton();
     return;
@@ -3096,12 +3147,25 @@ const renderMarketList = () => {
     list.replaceChildren(renderMarketEmpty(marketCache.error === 'login_required' ? 'login' : 'offline'));
     return;
   }
-  const recIds = new Set(rec.map((item) => item.id));
-  const items = filteredMarketItems().filter((item) => !recIds.has(item.id));
+  const items = filteredMarketItems();
+  const listPage = sliceMarketPage(items, marketListPage, 9);
+  marketListPage = listPage.page;
+  const listPager = marketPanel.querySelector('[data-list-pager]');
   if (!items.length) {
     list.replaceChildren(renderMarketEmpty(all.length ? 'search' : 'empty'));
+    if (listPager) {
+      const next = renderMarketPager(1, 1, () => {});
+      next.setAttribute('data-list-pager', '');
+      next.hidden = true;
+      listPager.replaceWith(next);
+    }
   } else {
-    list.replaceChildren(...items.map((item, index) => renderMarketCard(item, index, animate)));
+    list.replaceChildren(...listPage.items.map((item, index) => renderMarketCard(item, index, animate)));
+    if (listPager) {
+      const next = renderMarketPager(listPage.pages, listPage.page, (page) => { marketListPage = page; renderMarketList(); });
+      next.setAttribute('data-list-pager', '');
+      listPager.replaceWith(next);
+    }
   }
   const randomWrap = marketPanel.querySelector('[data-random-wrap]');
   const randomList = marketPanel.querySelector('[data-random-list]');
@@ -3517,11 +3581,12 @@ const openMarket = async () => {
       <section class="echo-recommend" data-recommend-wrap hidden>
         <div class="echo-recommend-head">
           <span class="section-kicker">${T.marketRecommend || 'Recommended'}</span>
-          <p>${T.marketRecommendHint || ''}</p>
+          <nav class="echo-store-pager" data-recommend-pager></nav>
         </div>
         <div class="echo-mod-list" data-recommend></div>
       </section>
       <div class="echo-mod-list" data-market-list></div>
+      <nav class="echo-store-pager" data-list-pager></nav>
       <section class="echo-recommend" data-random-wrap hidden>
         <div class="echo-recommend-head">
           <span class="section-kicker">${T.marketRandom || '随机插件'}</span>
@@ -3558,6 +3623,8 @@ const openMarket = async () => {
   searchInput.oninput = () => {
     marketSearchQuery = searchInput.value;
     searchClear.hidden = !marketSearchQuery;
+    marketListPage = 1;
+    marketRecPage = 1;
     renderMarketList();
   };
   searchInput.onfocus = () => renderMarketSuggest();
@@ -3569,12 +3636,16 @@ const openMarket = async () => {
     searchInput.value = '';
     marketSearchQuery = '';
     searchClear.hidden = true;
+    marketListPage = 1;
+    marketRecPage = 1;
     searchInput.focus();
     renderMarketList();
   };
   marketPanel.querySelectorAll('[data-market-filter]').forEach((chip) => {
     chip.onclick = () => {
       marketFilter = chip.dataset.marketFilter;
+      marketListPage = 1;
+      marketRecPage = 1;
       syncMarketToolbar();
       renderMarketList();
     };
@@ -3980,7 +4051,7 @@ document.addEventListener('click', (event) => {
 }, true);
 
 window.__echoExternalLoaderUi = {
-  version: 52,
+  version: 53,
   registerSidebar,
   unregisterSidebar: removeSidebar,
   uiSettings: () => ({ ...uiSettings }),

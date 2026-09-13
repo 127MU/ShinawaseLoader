@@ -143,6 +143,15 @@ main { position: relative; z-index: 1; width: min(1120px, calc(100% - 40px)); ma
   font-family: var(--echo-display); color: var(--echo-navy);
 }
 .kicker-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 28px 0 12px; }
+.pager { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 6px; padding: 16px 0 0; }
+.pager[hidden] { display: none; }
+.pager button {
+  min-width: 32px; height: 32px; padding: 0 8px; border: 0; border-radius: 8px;
+  background: transparent; color: inherit; font: 650 13px var(--echo-sans); cursor: pointer;
+}
+.pager button:hover:not(:disabled) { background: rgba(30, 42, 102, 0.06); }
+.pager button.is-current { background: rgba(30, 42, 102, 0.1); cursor: default; }
+.pager button:disabled { opacity: 0.35; cursor: default; }
 h1 {
   margin: 8px 0 0; font-size: 34px; letter-spacing: -0.02em; font-weight: 800;
   font-family: var(--echo-display); color: var(--heading);

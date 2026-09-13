@@ -1597,7 +1597,7 @@ const injectEnabled = async () => {
       const targetState = probe?.result?.value;
       if (targetState?.ready !== true) continue;
       lastCycleReadyCount += 1;
-      const uiReloaded = targetState.uiVersion < 52;
+      const uiReloaded = targetState.uiVersion < 53;
       if (uiReloaded) await injectLoaderUi(session).catch((error) => log('WARN', `loader UI injection failed: ${error.message}`, error));
       if (targetState.playerVersion < 1) await injectPlayerRuntime(session).catch((error) => log('WARN', `player runtime injection failed: ${error.message}`, error));
       if (targetState.extendVersion < 1) await injectExtendRuntime(session).catch((error) => log('WARN', `extend runtime injection failed: ${error.message}`, error));
@@ -2299,7 +2299,6 @@ const listMarket = async (options = {}) => {
       .map((item) => ({ item, score: marketRecommendScore(item, installedIds, installedTags) }))
       .filter((row) => row.score > 0)
       .sort((left, right) => right.score - left.score)
-      .slice(0, 4)
       .map((row) => row.item);
     const tags = [...new Set(mods.flatMap((item) => item.tags || []))];
     return {

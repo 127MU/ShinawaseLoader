@@ -7,7 +7,7 @@
   };
   const downloaded = new Set(readJson(localStorage.getItem('shinawase-market-downloaded') || '[]', []));
   const viewed = new Set(readJson(sessionStorage.getItem('shinawase-market-viewed') || '[]', []));
-  const state = { mods: [], query: '', tag: '', updatedAt: '', detail: null, user: null, manageOpen: '', manageScope: 'mine', randomPick: null };
+  const state = { mods: [], query: '', tag: '', updatedAt: '', detail: null, user: null, manageOpen: '', manageScope: 'mine', randomPick: null, recPage: 1, listPage: 1 };
   const shuffleMods = (count) => {
     const pool = state.mods.filter((item) => !item.unlisted);
     for (let i = pool.length - 1; i > 0; i -= 1) {
@@ -17,6 +17,29 @@
       pool[j] = swap;
     }
     return pool.slice(0, Math.min(count, pool.length));
+  };
+  const slicePage = (items, page, size) => {
+    const pages = Math.max(1, Math.ceil((items.length || 0) / size) || 1);
+    const current = Math.min(Math.max(1, page || 1), pages);
+    return { page: current, pages, items: items.slice((current - 1) * size, current * size) };
+  };
+  const paintPager = (host, pages, page, onPage) => {
+    if (!host) return;
+    host.replaceChildren();
+    host.hidden = pages <= 1;
+    if (pages <= 1) return;
+    const add = (label, target, current) => {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.textContent = label;
+      if (current) button.className = 'is-current';
+      if (target && target !== page) button.onclick = () => onPage(target);
+      else if (!current) button.disabled = true;
+      host.append(button);
+    };
+    add('‹', page > 1 ? page - 1 : 0, false);
+    for (let n = 1; n <= pages; n += 1) add(String(n), n, n === page);
+    add('›', page < pages ? page + 1 : 0, false);
   };
   const assetUrl = (value) => {
     try { return new URL(String(value || ''), pageBase).href; } catch { return String(value || ''); }
@@ -228,7 +251,6 @@
     return state.mods.map((item) => ({ item, score: recommendScore(item, downloaded, tags) }))
       .filter((row) => row.score > 0)
       .sort((a, b) => b.score - a.score)
-      .slice(0, 4)
       .map((row) => row.item);
   };
   const renderSuggest = () => {
@@ -268,7 +290,7 @@
     all.className = 'chip' + (state.tag ? '' : ' active');
     all.innerHTML = '全部<span class="n"></span>';
     all.querySelector('.n').textContent = String(state.mods.length);
-    all.onclick = () => { state.tag = ''; render(); };
+    all.onclick = () => { state.tag = ''; state.listPage = 1; state.recPage = 1; render(); };
     const chips = [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).slice(0, 8).map(([tag, count]) => {
       const chip = document.createElement('button');
       chip.type = 'button';
@@ -276,7 +298,7 @@
       chip.innerHTML = '<span></span><span class="n"></span>';
       chip.querySelector('span').textContent = tag;
       chip.querySelector('.n').textContent = String(count);
-      chip.onclick = () => { state.tag = state.tag === tag ? '' : tag; render(); };
+      chip.onclick = () => { state.tag = state.tag === tag ? '' : tag; state.listPage = 1; state.recPage = 1; render(); };
       return chip;
     });
     host.replaceChildren(all, ...chips);
@@ -495,13 +517,18 @@
     const recHost = $('[data-recommend]');
     const hideRec = Boolean(state.query.trim() || state.tag);
     recWrap.hidden = hideRec || !rec.length;
-    recHost.replaceChildren(...rec.map((item) => card(item, '获取')));
-    const recIds = new Set((hideRec ? [] : rec).map((item) => item.id));
-    const items = filtered().filter((item) => !recIds.has(item.id));
+    const recPage = slicePage(hideRec ? [] : rec, state.recPage, 3);
+    state.recPage = recPage.page;
+    recHost.replaceChildren(...recPage.items.map((item) => card(item, '获取')));
+    paintPager($('[data-recommend-pager]'), recPage.pages, recPage.page, (page) => { state.recPage = page; render(); });
+    const items = filtered();
+    const listPage = slicePage(items, state.listPage, 9);
+    state.listPage = listPage.page;
     $('[data-count]').textContent = String(items.length);
     const list = $('[data-list]');
     if (!items.length) list.replaceChildren(empty('没有匹配的插件', '试试其他关键词或标签。'));
-    else list.replaceChildren(...items.map((item) => card(item)));
+    else list.replaceChildren(...listPage.items.map((item) => card(item)));
+    paintPager($('[data-list-pager]'), listPage.pages, listPage.page, (page) => { state.listPage = page; render(); });
     const randomWrap = $('[data-random-wrap]');
     const randomHost = $('[data-random]');
     if (hideRec || !state.mods.length) {
@@ -564,10 +591,10 @@
   const bindSearch = () => {
     const input = $('[data-search]');
     const clear = $('[data-search-clear]');
-    input.addEventListener('input', () => { state.query = input.value; render(); });
+    input.addEventListener('input', () => { state.query = input.value; state.listPage = 1; state.recPage = 1; render(); });
     input.addEventListener('focus', renderSuggest);
     input.addEventListener('blur', () => setTimeout(() => { $('[data-suggest]').hidden = true; }, 180));
-    clear.onclick = () => { input.value = ''; state.query = ''; render(); input.focus(); };
+    clear.onclick = () => { input.value = ''; state.query = ''; state.listPage = 1; state.recPage = 1; render(); input.focus(); };
     window.addEventListener('hashchange', () => {
       if (location.hash.startsWith('#manage')) {
         closeDetail();
