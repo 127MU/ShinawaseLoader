@@ -15,10 +15,12 @@ const STEAM_STREAMING_REJECT = 'Music streaming playback is not available in the
 const KNOWN_STOCK_ASAR_SHA256 = {
   '26.8.28': 'c59648731aea7f109317c26a9181bb6626b9c9e7f130998c2577a99e9ccae2c0',
   '26.9.1': 'f245fd7683542bfd9f9e12fc628149bd04029819b6d2611ca274a1d7655545b6',
+  '26.9.16': '137b81875ac1f1c4735b2014b478ef27aaf7fb3fca9d6401ff0a218cc71f9271',
 };
 const KNOWN_STOCK_HEADER_SHA256 = {
   '26.8.28': 'b525231cec180d1ab15334ab8c2063400f222606eb43b9dc0c903b0d568cbfdd',
   '26.9.1': '8f685506c8b2ca9165e1ebd0a4c31385438e4bdeb41568cced2ce819a09cba1d',
+  '26.9.16': '5467723cc48791eac83ab03456570ad3e021847eb2d3bb8bc1ca4e00b7137bdc',
 };
 const knownAsarHashes = new Set(Object.values(KNOWN_STOCK_ASAR_SHA256));
 const knownHeaderHashes = new Set(Object.values(KNOWN_STOCK_HEADER_SHA256));
@@ -252,17 +254,34 @@ const createShinawaseQobuzApi = (ipc, channels) => ({
 });
 `;
 
+// echo-steam <= 26.9.13 exposes the community namespaces as empty placeholders
+// (`streaming: null,` / `downloads: null,` / `accounts: null,`) on the object
+// handed to contextBridge, so they can be swapped in place. 26.9.16 dropped the
+// placeholders entirely — the namespaces are simply absent from the preload —
+// so fall back to extending that same object right before it reaches
+// contextBridge. Both routes keep the surface identical for the streaming Mod.
+const preloadExposeAnchor = 'contextBridge.exposeInMainWorld("echo", echoApi);';
+const preloadLegacyReplacements = [
+  ['streaming: null,', 'streaming: createShinawaseStreamingApi(ipcRenderer, IpcChannels),'],
+  ['downloads: null,', 'downloads: createShinawaseDownloadsApi(ipcRenderer, IpcChannels),'],
+  ['accounts: null,', 'qobuz: createShinawaseQobuzApi(ipcRenderer, IpcChannels),\n  accounts: createShinawaseAccountsApi(ipcRenderer, IpcChannels),'],
+];
+const preloadAttachedApis = [
+  '    streaming: createShinawaseStreamingApi(ipcRenderer, IpcChannels),',
+  '    downloads: createShinawaseDownloadsApi(ipcRenderer, IpcChannels),',
+  '    qobuz: createShinawaseQobuzApi(ipcRenderer, IpcChannels),',
+  '    accounts: createShinawaseAccountsApi(ipcRenderer, IpcChannels),',
+].join('\n');
+
 const patchPreload = (text) => {
   if (text.includes(preloadMarker)) return text;
-  const replacements = [
-    ['streaming: null,', 'streaming: createShinawaseStreamingApi(ipcRenderer, IpcChannels),'],
-    ['downloads: null,', 'downloads: createShinawaseDownloadsApi(ipcRenderer, IpcChannels),'],
-    ['accounts: null,', 'qobuz: createShinawaseQobuzApi(ipcRenderer, IpcChannels),\n  accounts: createShinawaseAccountsApi(ipcRenderer, IpcChannels),'],
-  ];
   let next = text;
-  for (const [from, to] of replacements) {
-    if (!next.includes(from)) throw new Error(`asar_preload_entry_missing:${from}`);
-    next = next.replace(from, to);
+  if (preloadLegacyReplacements.every(([from]) => next.includes(from))) {
+    for (const [from, to] of preloadLegacyReplacements) next = next.replace(from, to);
+  } else if (next.includes(preloadExposeAnchor)) {
+    next = next.replace(preloadExposeAnchor, `Object.assign(echoApi, {\n${preloadAttachedApis}\n  });\n  ${preloadExposeAnchor}`);
+  } else {
+    throw new Error('asar_preload_entry_missing:window.echo');
   }
   return `${next.split('\n').slice(0, 1).join('\n')}\n${preloadBridge}\n${next.split('\n').slice(1).join('\n')}`;
 };
@@ -582,9 +601,11 @@ const verifyAnchors = (root) => {
     streamingPath: mainText.includes('  } else if (item.mediaType === "streaming") {\n    filePath = decodeM3u8ProviderTrackId(item.providerTrackId).trim();\n  } else {'),
     streamingReturn: mainText.includes('  return { filePath, mimeType: null, probe, durationSeconds };'),
     qualityPassthrough: mainText.includes('quality: "standard",\n      stableKey:'),
-    preloadStreamingNull: preloadText.includes('streaming: null,'),
-    preloadDownloadsNull: preloadText.includes('downloads: null,'),
-    preloadAccountsNull: preloadText.includes('accounts: null,'),
+    // An "entry" means the namespace has somewhere to be injected: the pre-26.9.14
+    // placeholder, or (26.9.16+) the window.echo object itself.
+    preloadStreamingEntry: preloadText.includes('streaming: null,') || preloadText.includes(preloadExposeAnchor),
+    preloadDownloadsEntry: preloadText.includes('downloads: null,') || preloadText.includes(preloadExposeAnchor),
+    preloadAccountsEntry: preloadText.includes('accounts: null,') || preloadText.includes(preloadExposeAnchor),
     playlistFilter: playlistHits.some((item) => item.filterMatches.length),
     aotMiniPlayerCtor: mainText.includes(aotCurrentCtor),
     aotPetHelper: mainText.includes(aotCurrentPet),
@@ -595,6 +616,11 @@ const verifyAnchors = (root) => {
     mainIntegrity: Boolean(main.info.integrity),
     preloadIntegrity: Boolean(preload.info.integrity),
   };
+  // The auxiliary-window crash workarounds are best-effort: echo-steam 26.9.16
+  // rewrote those helpers, and a missing anchor there means "nothing to patch",
+  // not a failed install. Everything else must line up for the patch to hold.
+  const required = { ...hits };
+  for (const optional of ['aotMiniPlayerCtor', 'aotPetHelper', 'aotBirthStamp']) delete required[optional];
   return {
     archive,
     stockAsarSha256: asarSha,
@@ -607,7 +633,8 @@ const verifyAnchors = (root) => {
     steamOriginalWriteBlocked: isSteamStockArchive(archive),
     playlistHits,
     hits,
-    ok: Object.values(hits).every(Boolean),
+    required,
+    ok: Object.values(required).every(Boolean),
   };
 };
 
