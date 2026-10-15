@@ -71,6 +71,7 @@ $script:Strings = @{
     extrasHint = '数字键或 ↑↓ 选中    空格 开关    Enter 下一步'
     pkgStreaming = 'ECHO Streaming'
     pkgMv = 'ECHO MV'
+    pkgLyrics = 'ECHO Lyrics Match Whitebox'
     progressPrepare = '准备目录'
     progressCopy = '复制 Loader'
     progressNode = '准备 Node 运行时'
@@ -138,6 +139,7 @@ $script:Strings = @{
     extrasHint = 'Number or arrows    Space toggle    Enter next'
     pkgStreaming = 'ECHO Streaming'
     pkgMv = 'ECHO MV'
+    pkgLyrics = 'ECHO Lyrics Match Whitebox'
     progressPrepare = 'prepare folders'
     progressCopy = 'copy loader'
     progressNode = 'prepare Node runtime'
@@ -1138,7 +1140,8 @@ function Get-ExamplePackagePath([string]$folderName) {
 function Choose-OptionalPackages {
   $source = @(
     @{ Key = '1'; Label = T 'pkgStreaming'; Folder = 'ECHO-Streaming'; Checked = $true },
-    @{ Key = '2'; Label = T 'pkgMv'; Folder = 'ECHO-MV'; Checked = $true }
+    @{ Key = '2'; Label = T 'pkgMv'; Folder = 'ECHO-MV'; Checked = $true },
+    @{ Key = '3'; Label = T 'pkgLyrics'; Folder = 'ECHO-LyricsMatchWhitebox'; Checked = $true }
   )
   $index = 0
   $visible = $true

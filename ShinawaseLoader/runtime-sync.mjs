@@ -21,7 +21,7 @@ import {
 import { spawnSync } from 'node:child_process';
 import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { patch, syncIntegrity } from './echo-asar.mjs';
+import { PATCH_REVISION, patch, syncIntegrity } from './echo-asar.mjs';
 import { DARWIN_APP_NAMES, LINUX_EXE_NAMES, installRootFromTarget, pathsEqual } from './platform.mjs';
 
 const loaderDir = dirname(fileURLToPath(import.meta.url));
@@ -239,6 +239,8 @@ const runtimeNeedsSync = (stock, previous, runtimeRoot, force = false) => {
   if (previous.exeSize !== stock.exeSize || previous.exeMtimeMs !== stock.exeMtimeMs) return 'exe-changed';
   if (previous.echoVersion && stock.echoVersion && previous.echoVersion !== stock.echoVersion) return 'version-changed';
   if (process.platform !== 'darwin' && previous.patchStatus !== 'patched' && previous.patchStatus !== 'already-patched') return 'patch-incomplete';
+  // Fingerprints written before patch revisions existed are revision 1.
+  if ((Number(previous.patchRevision) || 1) < PATCH_REVISION) return 'patch-outdated';
   return null;
 };
 
@@ -387,6 +389,7 @@ export const syncModdedRuntime = (options = {}) => {
     syncedAt: new Date().toISOString(),
     reason,
     patchStatus: patchResult?.status || 'patch-failed',
+    patchRevision: PATCH_REVISION,
     patchError,
     runtimeRoot,
     loaderVersion: readJson(join(loaderRoot, 'loader-version.json'), {})?.version || null,

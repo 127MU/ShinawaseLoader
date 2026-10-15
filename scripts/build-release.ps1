@@ -24,8 +24,22 @@ $loaderSource = Join-Path $ProjectRoot 'ShinawaseLoader'
 $loaderTarget = Join-Path $releaseRoot 'ShinawaseLoader'
 New-Item -ItemType Directory -Force -Path $loaderTarget | Out-Null
 Get-ChildItem -LiteralPath $loaderSource -Force |
-  Where-Object { $_.Name -notin @('node.exe', 'loader-state.json', 'loader-debug.log', 'Logs', 'backups', 'native-host.json', '.api-token') } |
+  Where-Object { $_.Name -notin @('node.exe', 'node_modules', 'modded-runtime', 'loader-state.json', 'loader-debug.log', 'Logs', 'backups', 'native-host.json', '.api-token') } |
   ForEach-Object { Copy-Item -LiteralPath $_.FullName -Destination (Join-Path $loaderTarget $_.Name) -Recurse -Force }
+# node-gyp intermediates; the built addon (echo-native-host.node) is kept.
+Remove-Item -LiteralPath (Join-Path $loaderTarget 'native\build') -Recurse -Force -ErrorAction SilentlyContinue
+
+# Shinawase Manager (GUI installer/manager), compiled from the copied tree so
+# the binary matches the shipped sources.
+& (Join-Path $PSScriptRoot 'build-manager.ps1') -Source (Join-Path $loaderTarget 'manager') -LoaderSource $loaderTarget -OutFile (Join-Path $releaseRoot 'ShinawaseManager.exe') -Force | Out-Null
+# Bundled packages the installer offers (Streaming, MV) and the extra one.
+$packagesTarget = Join-Path $releaseRoot 'examples\packages'
+New-Item -ItemType Directory -Force -Path $packagesTarget | Out-Null
+Get-ChildItem -LiteralPath (Join-Path $ProjectRoot 'examples\packages') -Filter '*.echomod' -File |
+  ForEach-Object { Copy-Item -LiteralPath $_.FullName -Destination $packagesTarget }
+
+# One-file installer (manager + loader + packages) next to the zip.
+& (Join-Path $PSScriptRoot 'build-setup.ps1') -LoaderSource $loaderTarget -PackagesSource $packagesTarget -OutFile (Join-Path $output "ShinawaseSetup-$version.exe") | Out-Null
 
 Copy-Item -LiteralPath (Join-Path $ProjectRoot 'setup-modloader.bat') -Destination $releaseRoot
 Copy-Item -LiteralPath (Join-Path $ProjectRoot 'pack-mod.bat') -Destination $releaseRoot
@@ -38,11 +52,12 @@ Copy-Item -LiteralPath (Join-Path $ProjectRoot 'scripts\pack-echomod.mjs') -Dest
   '',
   'This folder is the portable end-user release, not the development source tree.',
   '',
-  '1. Run setup-modloader.bat.',
-  '2. Let it scan for ECHO.exe or select the Steam ECHO directory.',
-  '3. After optional packages, set Steam launch options to:',
+  '1. Run ShinawaseManager.exe (or setup-modloader.bat without arguments). ShinawaseSetup-<version>.exe next to this zip installs it with Start menu entry instead.',
+  '2. It finds ECHO in your Steam libraries, installs with one click, picks the fastest download source,',
+  '   and can write the Steam launch option for you:',
   '   "<game folder>\ECHO.modded.exe" %command%',
-  '4. Or double-click ECHO.modded.exe / ShinawaseLoader\start-echo-with-mods.cmd.',
+  '3. Or double-click ECHO.modded.exe / ShinawaseLoader\start-echo-with-mods.cmd.',
+  '4. setup-modloader.bat -Action install -EchoRoot "<ECHO_ROOT>" still runs the console installer.',
   '',
   'ECHO.modded.exe is an independent host. It does not replace Steam ECHO.exe.',
   'Setup asks you to accept the ShinawaseLoader disclaimer. Normal launches do not ask again.',
@@ -62,7 +77,7 @@ Copy-Item -LiteralPath (Join-Path $ProjectRoot 'scripts\pack-echomod.mjs') -Dest
   "ShinawaseLoader $version",
   '',
   'This is the portable release output, not the development source tree.',
-  'Run setup-modloader.bat to scan or select ECHO and create ECHO.modded.exe.',
+  'Run ShinawaseManager.exe to install, update, launch and manage Mods (setup-modloader.bat opens it too).',
   'Do not replace Steam ECHO.exe. Set Steam launch options to:',
   '"<game folder>\ECHO.modded.exe" %command%',
   'The installer downloads Node into the current user cache only when needed.'

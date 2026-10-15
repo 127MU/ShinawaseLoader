@@ -37,10 +37,9 @@ vm.runInContext([
   extractConst('boxWithin'),
   extractConst('drawerFrame'),
   extractConst('drawerSettlesOpen'),
-  extractConst('createPullToClose'),
-  'Object.assign(globalThis, { boxWithin, drawerFrame, drawerSettlesOpen, createPullToClose });',
+  'Object.assign(globalThis, { boxWithin, drawerFrame, drawerSettlesOpen });',
 ].join('\n'), context);
-const { boxWithin, drawerFrame, drawerSettlesOpen, createPullToClose } = context;
+const { boxWithin, drawerFrame, drawerSettlesOpen } = context;
 const plain = (value) => JSON.parse(JSON.stringify(value));
 
 test('the drawer covers every native block from the top of the groups down to the dock', () => {
@@ -75,32 +74,22 @@ test('a slow release has to travel 30% away from where it started', () => {
   assert.equal(drawerSettlesOpen(0.35, 0, false), true);
 });
 
-test('pulling down at the top of the drawer closes it once the threshold is reached', () => {
-  const pull = createPullToClose({ threshold: 150, settleMs: 260 });
-  assert.deepEqual(plain(pull.wheel(-100, true, 1000)), { progress: 100 / 150, close: false });
-  assert.deepEqual(plain(pull.wheel(-100, true, 1080)), { progress: 1, close: true });
-});
-
-test('the fling that scrolls the list back to the top does not close the drawer', () => {
-  const pull = createPullToClose({ threshold: 150, settleMs: 260 });
-  pull.scrolled(1000);
-  assert.equal(pull.wheel(-100, true, 1050).progress, 0);
-  assert.equal(pull.wheel(-100, true, 1200).progress, 0, 'still the same gesture');
-  assert.equal(pull.wheel(-100, true, 1500).close, false);
-  assert.equal(pull.wheel(-100, true, 1560).close, true, 'a new pull after the list settled');
-});
-
-test('pulls separated by a pause, downward wheels and scrolled lists start over', () => {
-  const pull = createPullToClose({ threshold: 150, settleMs: 260 });
-  pull.wheel(-100, true, 1000);
-  assert.equal(pull.wheel(-100, true, 1400).close, false, 'the earlier pull has relaxed');
-  pull.wheel(-100, true, 2000);
-  assert.equal(pull.wheel(40, true, 2050).progress, 0);
-  assert.equal(pull.wheel(-100, true, 2100).close, false);
-  assert.equal(pull.wheel(-100, false, 2150).progress, 0, 'not at the top: the list scrolls instead');
-  pull.wheel(-100, true, 3000);
-  pull.reset();
-  assert.equal(pull.wheel(-100, true, 3050).close, false);
+test('the wheel never moves the drawer sheet', () => {
+  assert.ok(!/drawerPull|createPullToClose/u.test(source), 'wheel pull-to-close is gone');
+  const handler = /const onDrawerWheel = \(event\) => \{([\s\S]*?)\r?\n\};/u.exec(source);
+  assert.ok(handler, 'wheel handler present');
+  assert.ok(!/closeDrawer|animateDrawer|setDrawerProgress/u.test(handler[1]), 'the wheel handler only blocks scroll chaining');
+  const target = {};
+  const onWheel = vm.runInNewContext(`(event) => {${handler[1]}}`, { drawerBody: { contains: (node) => node === target } });
+  for (const deltaY of [-1000, -1, 1, 1000]) {
+    let blocked = 0;
+    onWheel({ target, deltaY, preventDefault: () => { blocked += 1; } });
+    assert.equal(blocked, 0, 'body scrolling remains available');
+    onWheel({ target: {}, deltaY, preventDefault: () => { blocked += 1; } });
+    assert.equal(blocked, 1, 'chrome scrolling cannot chain to the host');
+    onWheel({ target: {}, deltaY, ctrlKey: true, preventDefault: () => { blocked += 1; } });
+    assert.equal(blocked, 1, 'Ctrl-wheel retains browser zoom behavior');
+  }
 });
 
 test('boxes are measured in the sidebar positioning space', () => {

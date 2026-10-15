@@ -78,6 +78,13 @@ test('the pre-26.9.16 stub triple keeps patching', () => {
   assert.ok(!patched.includes('streaming: null,'), 'stubs replaced');
 });
 
+test('a failed streaming lyric lookup stays missing so the lyrics page can read candidates', () => {
+  const patched = patchPreload(echoApi26103);
+  assert.match(patched, /ipc\.invoke\(channels\.StreamingGetLyrics, request\)/u);
+  assert.match(patched, /status: 'missing'/u);
+  assert.match(patched, /\.catch\(\(\) => \(\{ status: 'missing', lines: \[\], instrumental: false \}\)\)/u);
+});
+
 test('patching twice is a no-op', () => {
   const once = patchPreload(echoApi26103);
   assert.equal(patchPreload(once), once);

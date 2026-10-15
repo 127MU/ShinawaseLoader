@@ -1,0 +1,943 @@
+<Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Shinawase Manager" Width="1080" Height="700"
+        WindowStartupLocation="CenterScreen" ResizeMode="CanMinimize"
+        Background="{DynamicResource B.Bg}" Foreground="{DynamicResource B.Text}"
+        FontFamily="Segoe UI Variable Text, Segoe UI, Microsoft YaHei UI" FontSize="13.5"
+        UseLayoutRounding="True" SnapsToDevicePixels="True" AllowDrop="True"
+        TextOptions.TextFormattingMode="Ideal">
+  <WindowChrome.WindowChrome>
+    <WindowChrome CaptionHeight="40" ResizeBorderThickness="0" GlassFrameThickness="0,0,0,1" CornerRadius="0" UseAeroCaptionButtons="False"/>
+  </WindowChrome.WindowChrome>
+
+  <Grid x:Name="RootGrid" Background="{DynamicResource B.Bg}">
+    <Grid.ColumnDefinitions>
+      <ColumnDefinition Width="236"/>
+      <ColumnDefinition Width="*"/>
+    </Grid.ColumnDefinitions>
+
+    <!-- ================= sidebar ================= -->
+    <Border Grid.Column="0" Background="{DynamicResource B.Sidebar}" BorderBrush="{DynamicResource B.Divider}" BorderThickness="0,0,1,0">
+      <Grid x:Name="Sidebar" Margin="16,18,16,16">
+        <Grid.RowDefinitions>
+          <RowDefinition Height="Auto"/>
+          <RowDefinition Height="Auto"/>
+          <RowDefinition Height="*"/>
+          <RowDefinition Height="Auto"/>
+          <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+        <StackPanel Orientation="Horizontal" Margin="6,0,0,0">
+          <Grid Width="36" Height="36">
+            <Border CornerRadius="10">
+              <Border.Background>
+                <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                  <GradientStop Color="#8A6CF7" Offset="0"/>
+                  <GradientStop Color="#4B55E8" Offset="1"/>
+                </LinearGradientBrush>
+              </Border.Background>
+            </Border>
+            <StackPanel x:Name="LogoBars" Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
+              <Border Width="3.4" Height="10.5" CornerRadius="1.7" Background="#FFFFFF" Margin="1.2,0" VerticalAlignment="Center" RenderTransformOrigin="0.5,0.5"><Border.RenderTransform><ScaleTransform/></Border.RenderTransform></Border>
+              <Border Width="3.4" Height="19" CornerRadius="1.7" Background="#FFFFFF" Margin="1.2,0" VerticalAlignment="Center" RenderTransformOrigin="0.5,0.5"><Border.RenderTransform><ScaleTransform/></Border.RenderTransform></Border>
+              <Border Width="3.4" Height="14" CornerRadius="1.7" Background="#FFFFFF" Margin="1.2,0" VerticalAlignment="Center" RenderTransformOrigin="0.5,0.5"><Border.RenderTransform><ScaleTransform/></Border.RenderTransform></Border>
+              <Border Width="3.4" Height="7.5" CornerRadius="1.7" Background="#FFFFFF" Margin="1.2,0" VerticalAlignment="Center" RenderTransformOrigin="0.5,0.5"><Border.RenderTransform><ScaleTransform/></Border.RenderTransform></Border>
+            </StackPanel>
+          </Grid>
+          <StackPanel Margin="11,0,0,0" VerticalAlignment="Center">
+            <TextBlock Text="Shinawase" FontSize="15.5" FontWeight="SemiBold" FontFamily="Segoe UI Variable Display, Segoe UI"/>
+            <TextBlock Text="{DynamicResource s.app.sub}" FontSize="11.5" Foreground="{DynamicResource B.Text3}" Margin="0,1,0,0"/>
+          </StackPanel>
+        </StackPanel>
+
+        <Grid Grid.Row="1" Margin="0,28,0,0" x:Name="NavPanel">
+          <Border x:Name="NavIndicator" Height="40" VerticalAlignment="Top" CornerRadius="10" Background="{DynamicResource B.NavActive}" BorderBrush="{DynamicResource B.NavActiveBorder}" BorderThickness="1">
+            <Border.RenderTransform><TranslateTransform x:Name="NavIndicatorTT"/></Border.RenderTransform>
+            <Border Width="3" Height="16" CornerRadius="1.5" Background="{DynamicResource B.Accent}" HorizontalAlignment="Left" Margin="-1,0,0,0"/>
+          </Border>
+          <StackPanel x:Name="NavStack">
+            <RadioButton x:Name="NavHome" Style="{StaticResource Nav}" Tag="&#xE80F;" Content="{DynamicResource s.nav.home}" IsChecked="True"/>
+            <RadioButton x:Name="NavMods" Style="{StaticResource Nav}" Tag="&#xEA86;" Content="{DynamicResource s.nav.mods}"/>
+            <RadioButton x:Name="NavSteam" Style="{StaticResource Nav}" Tag="&#xE7FC;" Content="{DynamicResource s.nav.steam}"/>
+            <RadioButton x:Name="NavSettings" Style="{StaticResource Nav}" Tag="&#xE713;" Content="{DynamicResource s.nav.settings}"/>
+            <RadioButton x:Name="NavAbout" Style="{StaticResource Nav}" Tag="&#xE946;" Content="{DynamicResource s.nav.about}"/>
+          </StackPanel>
+        </Grid>
+
+        <Border Grid.Row="3" CornerRadius="12" Background="{DynamicResource B.Surface}" BorderBrush="{DynamicResource B.Border}" BorderThickness="1" Padding="12,10" Margin="0,0,0,12">
+          <Grid>
+            <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+            <Grid Width="10" Height="10" VerticalAlignment="Top" Margin="0,4,0,0">
+              <Ellipse x:Name="SideDotHalo" Fill="{DynamicResource B.Text3}" Opacity="0" RenderTransformOrigin="0.5,0.5"><Ellipse.RenderTransform><ScaleTransform/></Ellipse.RenderTransform></Ellipse>
+              <Ellipse x:Name="SideDot" Width="8" Height="8" Fill="{DynamicResource B.Text3}"/>
+            </Grid>
+            <StackPanel Grid.Column="1" Margin="10,0,0,0">
+              <TextBlock x:Name="SideStatus" FontSize="12.5" FontWeight="SemiBold" Text="—"/>
+              <TextBlock x:Name="SideStatusSub" FontSize="11.5" Foreground="{DynamicResource B.Text3}" TextTrimming="CharacterEllipsis" Margin="0,1,0,0" Text=""/>
+            </StackPanel>
+          </Grid>
+        </Border>
+
+        <Grid Grid.Row="4">
+          <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+          <Border Style="{StaticResource SegmentHost}">
+            <StackPanel Orientation="Horizontal">
+              <RadioButton x:Name="LangZh" Style="{StaticResource Segment}" GroupName="sideLang" Content="中" MinWidth="36"/>
+              <RadioButton x:Name="LangEn" Style="{StaticResource Segment}" GroupName="sideLang" Content="EN" MinWidth="36"/>
+            </StackPanel>
+          </Border>
+          <Button x:Name="ThemeToggle" Grid.Column="2" Style="{StaticResource IconBtn}" ToolTip="{DynamicResource s.side.theme}" Content="&#xE793;"/>
+        </Grid>
+      </Grid>
+    </Border>
+
+    <!-- ================= pages ================= -->
+    <Grid x:Name="MainArea" Grid.Column="1">
+      <Grid x:Name="PageHost" Margin="0,36,0,0">
+
+        <!-- overview -->
+        <ScrollViewer x:Name="PageHome">
+          <StackPanel x:Name="HomeStack" Margin="40,6,40,36">
+            <StackPanel>
+              <TextBlock Style="{StaticResource H1}" Text="{DynamicResource s.home.title}"/>
+              <TextBlock Style="{StaticResource Sub}" Text="{DynamicResource s.home.sub}" Margin="0,4,0,0"/>
+            </StackPanel>
+
+            <Grid Margin="0,24,0,0">
+              <Border CornerRadius="20" Background="{DynamicResource B.Hero}" BorderBrush="{DynamicResource B.Border}" BorderThickness="1"/>
+              <Canvas x:Name="HeroArt" ClipToBounds="True" IsHitTestVisible="False" Opacity="0.9">
+                <Ellipse x:Name="HeroOrb1" Width="300" Height="300" Canvas.Left="470" Canvas.Top="-140" Fill="{DynamicResource B.HeroOrb}"/>
+                <Ellipse x:Name="HeroOrb2" Width="190" Height="190" Canvas.Left="610" Canvas.Top="90" Fill="{DynamicResource B.HeroOrb2}"/>
+              </Canvas>
+              <Grid x:Name="HeroContent" Margin="30,28,30,28">
+                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                <StackPanel VerticalAlignment="Center">
+                  <Border Style="{StaticResource Chip}" HorizontalAlignment="Left" Background="{DynamicResource B.HeroChip}">
+                    <StackPanel Orientation="Horizontal">
+                      <Ellipse x:Name="HeroDot" Width="7" Height="7" Fill="{DynamicResource B.Text3}" VerticalAlignment="Center"/>
+                      <TextBlock x:Name="HeroChip" Margin="7,0,0,0" FontSize="12" FontWeight="SemiBold" Text="—"/>
+                    </StackPanel>
+                  </Border>
+                  <TextBlock x:Name="HeroTitle" Margin="0,14,0,0" FontSize="25" FontWeight="SemiBold" FontFamily="Segoe UI Variable Display, Segoe UI, Microsoft YaHei UI" TextWrapping="Wrap" Text=" "/>
+                  <TextBlock x:Name="HeroSub" Style="{StaticResource Sub}" Margin="0,8,0,0" MaxWidth="460" HorizontalAlignment="Left" Text=" "/>
+                  <StackPanel x:Name="HeroPathRow" Orientation="Horizontal" Margin="0,18,0,0">
+                    <TextBlock Style="{StaticResource Glyph}" Text="&#xE838;" FontSize="13" Foreground="{DynamicResource B.Text3}"/>
+                    <TextBlock x:Name="HeroPath" Margin="8,0,4,0" FontSize="12.5" Foreground="{DynamicResource B.Text2}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" MaxWidth="330"/>
+                    <Button x:Name="HeroChange" Style="{StaticResource Link}" Content="{DynamicResource s.home.change}"/>
+                  </StackPanel>
+                </StackPanel>
+                <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="24,0,0,0" MinWidth="176">
+                  <Button x:Name="HeroPrimary" Style="{StaticResource PrimaryLarge}">
+                    <Grid>
+                      <StackPanel x:Name="HeroPrimaryBody" Orientation="Horizontal">
+                        <TextBlock x:Name="HeroPrimaryIcon" FontFamily="{StaticResource IconFont}" FontSize="15" VerticalAlignment="Center" Text="&#xE768;"/>
+                        <TextBlock x:Name="HeroPrimaryText" Margin="10,0,0,0" VerticalAlignment="Center" Text=" "/>
+                      </StackPanel>
+                      <ContentControl x:Name="HeroPrimarySpin" Style="{StaticResource Spinner}" Foreground="#FFFFFF" Visibility="Collapsed" HorizontalAlignment="Center"/>
+                    </Grid>
+                  </Button>
+                  <Button x:Name="HeroSecondary" Style="{StaticResource Ghost}" Margin="0,8,0,0" HorizontalAlignment="Center" Height="30" FontSize="12.5"/>
+                </StackPanel>
+              </Grid>
+            </Grid>
+
+            <Grid x:Name="TileGrid" Margin="0,16,0,0">
+              <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="14"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+              <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="14"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+              <Button x:Name="TileLoader" Style="{StaticResource Tile}">
+                <Grid>
+                  <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                  <Border Width="40" Height="40" CornerRadius="12" Background="{DynamicResource B.AccentSoft}" VerticalAlignment="Top"><TextBlock Style="{StaticResource Glyph}" Text="&#xE7B8;" Foreground="{DynamicResource B.Accent}"/></Border>
+                  <StackPanel Grid.Column="1" Margin="14,0,0,0">
+                    <TextBlock Text="{DynamicResource s.tile.loader}" FontSize="12.5" Foreground="{DynamicResource B.Text3}"/>
+                    <TextBlock x:Name="TileLoaderValue" FontSize="16" FontWeight="SemiBold" Margin="0,3,0,0" Text="—"/>
+                    <TextBlock x:Name="TileLoaderSub" FontSize="12.5" Foreground="{DynamicResource B.Text2}" Margin="0,2,0,0" TextTrimming="CharacterEllipsis" Text=" "/>
+                  </StackPanel>
+                  <Grid Grid.Column="2" VerticalAlignment="Center">
+                    <ContentControl x:Name="TileLoaderSpin" Style="{StaticResource Spinner}" Width="16" Height="16" Visibility="Collapsed"/>
+                    <TextBlock x:Name="TileLoaderGlyph" Style="{StaticResource Glyph}" Text="&#xE72C;" FontSize="13" Foreground="{DynamicResource B.Text3}"/>
+                  </Grid>
+                </Grid>
+              </Button>
+              <Button x:Name="TileSteam" Grid.Column="2" Style="{StaticResource Tile}">
+                <Grid>
+                  <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                  <Border x:Name="TileSteamBadge" Width="40" Height="40" CornerRadius="12" Background="{DynamicResource B.AccentSoft}" VerticalAlignment="Top"><TextBlock x:Name="TileSteamIcon" Style="{StaticResource Glyph}" Text="&#xE7FC;" Foreground="{DynamicResource B.Accent}"/></Border>
+                  <StackPanel Grid.Column="1" Margin="14,0,0,0">
+                    <TextBlock Text="{DynamicResource s.tile.steam}" FontSize="12.5" Foreground="{DynamicResource B.Text3}"/>
+                    <TextBlock x:Name="TileSteamValue" FontSize="16" FontWeight="SemiBold" Margin="0,3,0,0" Text="—"/>
+                    <TextBlock x:Name="TileSteamSub" FontSize="12.5" Foreground="{DynamicResource B.Text2}" Margin="0,2,0,0" TextTrimming="CharacterEllipsis" Text=" "/>
+                  </StackPanel>
+                  <TextBlock Grid.Column="2" Style="{StaticResource Glyph}" Text="&#xE76C;" FontSize="12" Foreground="{DynamicResource B.Text3}"/>
+                </Grid>
+              </Button>
+              <Button x:Name="TileRun" Grid.Row="2" Style="{StaticResource Tile}">
+                <Grid>
+                  <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                  <Border Width="40" Height="40" CornerRadius="12" Background="{DynamicResource B.AccentSoft}" VerticalAlignment="Top"><TextBlock Style="{StaticResource Glyph}" Text="&#xE9D9;" Foreground="{DynamicResource B.Accent}"/></Border>
+                  <StackPanel Grid.Column="1" Margin="14,0,0,0">
+                    <TextBlock Text="{DynamicResource s.tile.run}" FontSize="12.5" Foreground="{DynamicResource B.Text3}"/>
+                    <StackPanel Orientation="Horizontal" Margin="0,3,0,0">
+                      <Ellipse x:Name="TileRunDot" Width="8" Height="8" Fill="{DynamicResource B.Text3}" VerticalAlignment="Center" Margin="0,1,8,0"/>
+                      <TextBlock x:Name="TileRunValue" FontSize="16" FontWeight="SemiBold" Text="—"/>
+                    </StackPanel>
+                    <TextBlock x:Name="TileRunSub" FontSize="12.5" Foreground="{DynamicResource B.Text2}" Margin="0,2,0,0" TextTrimming="CharacterEllipsis" Text=" "/>
+                  </StackPanel>
+                  <TextBlock Grid.Column="2" Style="{StaticResource Glyph}" Text="&#xE76C;" FontSize="12" Foreground="{DynamicResource B.Text3}"/>
+                </Grid>
+              </Button>
+              <Button x:Name="TileNet" Grid.Row="2" Grid.Column="2" Style="{StaticResource Tile}">
+                <Grid>
+                  <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                  <Border Width="40" Height="40" CornerRadius="12" Background="{DynamicResource B.AccentSoft}" VerticalAlignment="Top"><TextBlock Style="{StaticResource Glyph}" Text="&#xE774;" Foreground="{DynamicResource B.Accent}"/></Border>
+                  <StackPanel Grid.Column="1" Margin="14,0,0,0">
+                    <TextBlock Text="{DynamicResource s.tile.net}" FontSize="12.5" Foreground="{DynamicResource B.Text3}"/>
+                    <TextBlock x:Name="TileNetValue" FontSize="16" FontWeight="SemiBold" Margin="0,3,0,0" TextTrimming="CharacterEllipsis" Text="—"/>
+                    <TextBlock x:Name="TileNetSub" FontSize="12.5" Foreground="{DynamicResource B.Text2}" Margin="0,2,0,0" TextTrimming="CharacterEllipsis" Text=" "/>
+                  </StackPanel>
+                  <TextBlock Grid.Column="2" Style="{StaticResource Glyph}" Text="&#xE76C;" FontSize="12" Foreground="{DynamicResource B.Text3}"/>
+                </Grid>
+              </Button>
+            </Grid>
+          </StackPanel>
+        </ScrollViewer>
+
+        <!-- mods -->
+        <ScrollViewer x:Name="PageMods" Visibility="Collapsed">
+          <StackPanel x:Name="ModsStack" Margin="40,6,40,36">
+            <Grid>
+              <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+              <StackPanel>
+                <TextBlock Style="{StaticResource H1}" Text="{DynamicResource s.mods.title}"/>
+                <TextBlock Style="{StaticResource Sub}" Text="{DynamicResource s.mods.sub}" Margin="0,4,0,0"/>
+              </StackPanel>
+              <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Bottom">
+                <Button x:Name="ModsFolder" Style="{StaticResource Secondary}">
+                  <StackPanel Orientation="Horizontal"><TextBlock Style="{StaticResource Glyph}" Text="&#xE838;" FontSize="13"/><TextBlock Margin="8,0,0,0" Text="{DynamicResource s.mods.folder}"/></StackPanel>
+                </Button>
+                <Button x:Name="ModsImport" Style="{StaticResource Primary}" Margin="10,0,0,0">
+                  <StackPanel Orientation="Horizontal"><TextBlock Style="{StaticResource Glyph}" Text="&#xE8B5;" FontSize="13"/><TextBlock Margin="8,0,0,0" Text="{DynamicResource s.mods.import}"/></StackPanel>
+                </Button>
+              </StackPanel>
+            </Grid>
+
+            <Border x:Name="ModsNoLoader" Style="{StaticResource Card}" Margin="0,24,0,0" Padding="28" Visibility="Collapsed">
+              <StackPanel HorizontalAlignment="Center">
+                <Border Width="56" Height="56" CornerRadius="18" Background="{DynamicResource B.AccentSoft}" HorizontalAlignment="Center"><TextBlock Style="{StaticResource Glyph}" Text="&#xEA86;" FontSize="22" Foreground="{DynamicResource B.Accent}"/></Border>
+                <TextBlock Style="{StaticResource H3}" Text="{DynamicResource s.mods.noLoader}" HorizontalAlignment="Center" Margin="0,14,0,0"/>
+                <TextBlock Style="{StaticResource Desc}" Text="{DynamicResource s.mods.noLoaderHint}" HorizontalAlignment="Center"/>
+                <Button x:Name="ModsGoInstall" Style="{StaticResource Primary}" Content="{DynamicResource s.mods.goInstall}" HorizontalAlignment="Center" Margin="0,16,0,0"/>
+              </StackPanel>
+            </Border>
+
+            <StackPanel x:Name="ModsContent">
+              <Grid>
+                <TextBlock x:Name="ModsInstalledLabel" Style="{StaticResource Section}" Text="{DynamicResource s.mods.installed}"/>
+              </Grid>
+              <Border x:Name="ModsEmpty" Style="{StaticResource Card}" Padding="28" Visibility="Collapsed">
+                <StackPanel HorizontalAlignment="Center">
+                  <Border Width="56" Height="56" CornerRadius="18" Background="{DynamicResource B.Surface2}" HorizontalAlignment="Center"><TextBlock Style="{StaticResource Glyph}" Text="&#xE8B5;" FontSize="22" Foreground="{DynamicResource B.Text3}"/></Border>
+                  <TextBlock Style="{StaticResource H3}" Text="{DynamicResource s.mods.empty}" HorizontalAlignment="Center" Margin="0,14,0,0"/>
+                  <TextBlock Style="{StaticResource Desc}" Text="{DynamicResource s.mods.emptyHint}" HorizontalAlignment="Center"/>
+                </StackPanel>
+              </Border>
+              <ItemsControl x:Name="ModsList">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate>
+                    <Border Style="{StaticResource Card}" Padding="16,14" Margin="0,0,0,10">
+                      <Grid>
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                        <Grid Width="42" Height="42" VerticalAlignment="Top">
+                          <Border CornerRadius="12" Background="{Binding AvatarBrush}"><TextBlock Text="{Binding Initial}" Foreground="#FFFFFF" FontWeight="SemiBold" FontSize="17" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border>
+                          <Border x:Name="iconBox" CornerRadius="12" Visibility="Collapsed" Background="{DynamicResource B.Surface2}">
+                            <Border CornerRadius="12"><Border.Background><ImageBrush ImageSource="{Binding Icon}" Stretch="UniformToFill"/></Border.Background></Border>
+                          </Border>
+                        </Grid>
+                        <StackPanel Grid.Column="1" Margin="14,0,12,0" VerticalAlignment="Center">
+                          <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="{Binding Title}" FontSize="14.5" FontWeight="SemiBold"/>
+                            <Border Style="{StaticResource Chip}" Margin="8,0,0,0" Padding="7,1"><TextBlock Text="{Binding KindText}" FontSize="11" Foreground="{DynamicResource B.Text2}"/></Border>
+                          </StackPanel>
+                          <TextBlock Text="{Binding Meta}" FontSize="12" Foreground="{DynamicResource B.Text3}" Margin="0,2,0,0"/>
+                          <TextBlock x:Name="desc" Text="{Binding Desc}" FontSize="12.5" Foreground="{DynamicResource B.Text2}" Margin="0,4,0,0" TextTrimming="CharacterEllipsis"/>
+                        </StackPanel>
+                        <Grid Grid.Column="2" VerticalAlignment="Center">
+                          <CheckBox x:Name="toggle" Style="{StaticResource Switch}" Tag="toggle" IsChecked="{Binding Enabled, Mode=OneWay}" IsEnabled="{Binding Idle}"/>
+                        </Grid>
+                        <Button Grid.Column="3" Style="{StaticResource IconBtn}" Tag="remove" Content="&#xE74D;" Margin="10,0,0,0" ToolTip="{DynamicResource s.mods.remove}" IsEnabled="{Binding Idle}"/>
+                      </Grid>
+                    </Border>
+                    <DataTemplate.Triggers>
+                      <DataTrigger Binding="{Binding HasIcon}" Value="True"><Setter TargetName="iconBox" Property="Visibility" Value="Visible"/></DataTrigger>
+                      <DataTrigger Binding="{Binding Desc}" Value=""><Setter TargetName="desc" Property="Visibility" Value="Collapsed"/></DataTrigger>
+                    </DataTemplate.Triggers>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+              <TextBlock Style="{StaticResource Desc}" Text="{DynamicResource s.mods.liveHint}" Foreground="{DynamicResource B.Text3}" Margin="4,2,0,0"/>
+
+              <TextBlock Style="{StaticResource Section}" Text="{DynamicResource s.mods.recommended}"/>
+              <ItemsControl x:Name="BundledList">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate>
+                    <Border Style="{StaticResource Card}" Padding="16,14" Margin="0,0,0,10">
+                      <Grid>
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                        <Border Width="42" Height="42" CornerRadius="12" VerticalAlignment="Top">
+                          <Border.Background>
+                            <LinearGradientBrush StartPoint="0,0" EndPoint="1,1"><GradientStop Color="#8A6CF7" Offset="0"/><GradientStop Color="#4B55E8" Offset="1"/></LinearGradientBrush>
+                          </Border.Background>
+                          <TextBlock Style="{StaticResource Glyph}" Text="&#xE8D6;" Foreground="#FFFFFF" FontSize="17"/>
+                        </Border>
+                        <StackPanel Grid.Column="1" Margin="14,0,12,0" VerticalAlignment="Center">
+                          <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="{Binding Name}" FontSize="14.5" FontWeight="SemiBold"/>
+                            <TextBlock Text="{Binding VersionText}" FontSize="12" Foreground="{DynamicResource B.Text3}" Margin="8,0,0,0" VerticalAlignment="Center"/>
+                          </StackPanel>
+                          <TextBlock Text="{Binding Description}" FontSize="12.5" Foreground="{DynamicResource B.Text2}" Margin="0,3,0,0"/>
+                        </StackPanel>
+                        <Grid Grid.Column="2" VerticalAlignment="Center">
+                          <Button x:Name="act" Style="{StaticResource Secondary}" Tag="install" Content="{Binding ActionText}" IsEnabled="{Binding CanInstall}" MinWidth="92"/>
+                          <ContentControl x:Name="spin" Style="{StaticResource Spinner}" Visibility="Collapsed"/>
+                        </Grid>
+                      </Grid>
+                    </Border>
+                    <DataTemplate.Triggers>
+                      <DataTrigger Binding="{Binding Busy}" Value="True">
+                        <Setter TargetName="act" Property="Visibility" Value="Hidden"/>
+                        <Setter TargetName="spin" Property="Visibility" Value="Visible"/>
+                      </DataTrigger>
+                    </DataTemplate.Triggers>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+            </StackPanel>
+          </StackPanel>
+        </ScrollViewer>
+
+        <!-- steam -->
+        <ScrollViewer x:Name="PageSteam" Visibility="Collapsed">
+          <StackPanel x:Name="SteamStack" Margin="40,6,40,36">
+            <StackPanel>
+              <TextBlock Style="{StaticResource H1}" Text="{DynamicResource s.steam.title}"/>
+              <TextBlock Style="{StaticResource Sub}" Text="{DynamicResource s.steam.sub}" Margin="0,4,0,0"/>
+            </StackPanel>
+            <Border Style="{StaticResource Card}" Margin="0,24,0,0" Padding="24,22">
+              <StackPanel>
+                <Grid>
+                  <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                  <Border x:Name="SteamBadge" Width="50" Height="50" CornerRadius="15" Background="{DynamicResource B.Surface2}">
+                    <TextBlock x:Name="SteamGlyph" Style="{StaticResource Glyph}" FontSize="20" Text="&#xE7FC;" Foreground="{DynamicResource B.Text3}"/>
+                  </Border>
+                  <StackPanel Grid.Column="1" Margin="16,0,0,0" VerticalAlignment="Center">
+                    <TextBlock x:Name="SteamTitle" FontSize="18" FontWeight="SemiBold" Text="—"/>
+                    <TextBlock x:Name="SteamSub" Style="{StaticResource Desc}" Text=" "/>
+                  </StackPanel>
+                </Grid>
+                <TextBlock Text="{DynamicResource s.steam.line}" FontSize="12.5" Foreground="{DynamicResource B.Text3}" Margin="2,20,0,8" FontWeight="SemiBold"/>
+                <Border CornerRadius="10" Background="{DynamicResource B.CodeBg}" BorderBrush="{DynamicResource B.Border}" BorderThickness="1" Padding="14,4,6,4">
+                  <Grid>
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                    <TextBox x:Name="SteamLine" Style="{StaticResource LogBox}" FontSize="12.5" Foreground="{DynamicResource B.Text}" TextWrapping="NoWrap" VerticalAlignment="Center" VerticalScrollBarVisibility="Disabled"/>
+                    <Button x:Name="SteamCopy" Grid.Column="1" Style="{StaticResource Ghost}" Height="32">
+                      <StackPanel Orientation="Horizontal"><TextBlock Style="{StaticResource Glyph}" Text="&#xE8C8;" FontSize="12"/><TextBlock Margin="7,0,0,0" Text="{DynamicResource s.steam.copy}"/></StackPanel>
+                    </Button>
+                  </Grid>
+                </Border>
+                <StackPanel Orientation="Horizontal" Margin="0,18,0,0">
+                  <Button x:Name="SteamApply" Style="{StaticResource Primary}" MinWidth="118">
+                    <Grid>
+                      <TextBlock x:Name="SteamApplyText" Text="{DynamicResource s.steam.apply}"/>
+                      <ContentControl x:Name="SteamApplySpin" Style="{StaticResource Spinner}" Foreground="#FFFFFF" Visibility="Collapsed" Width="16" Height="16"/>
+                    </Grid>
+                  </Button>
+                  <Button x:Name="SteamRestore" Style="{StaticResource Secondary}" Margin="10,0,0,0" Content="{DynamicResource s.steam.restore}"/>
+                </StackPanel>
+                <TextBlock Style="{StaticResource Desc}" Text="{DynamicResource s.steam.note}" Foreground="{DynamicResource B.Text3}" Margin="2,14,0,0"/>
+              </StackPanel>
+            </Border>
+
+            <TextBlock Style="{StaticResource Section}" Text="{DynamicResource s.steam.accounts}"/>
+            <Border Style="{StaticResource Card}" Padding="8">
+              <ItemsControl x:Name="SteamAccounts">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate>
+                    <Grid Margin="10,8">
+                      <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                      <Border Width="34" Height="34" CornerRadius="17" Background="{DynamicResource B.Surface2}"><TextBlock Text="{Binding Initial}" FontWeight="SemiBold" HorizontalAlignment="Center" VerticalAlignment="Center" Foreground="{DynamicResource B.Text2}"/></Border>
+                      <StackPanel Grid.Column="1" Margin="12,0,0,0" VerticalAlignment="Center">
+                        <TextBlock Text="{Binding DisplayName}" FontWeight="SemiBold"/>
+                        <TextBlock Text="{Binding SubText}" FontSize="12" Foreground="{DynamicResource B.Text3}" Margin="0,1,0,0"/>
+                      </StackPanel>
+                      <Border x:Name="chip" Grid.Column="2" Style="{StaticResource Chip}" Background="{DynamicResource B.Surface2}">
+                        <TextBlock x:Name="chipText" Text="{Binding StateText}" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource B.Text2}"/>
+                      </Border>
+                    </Grid>
+                    <DataTemplate.Triggers>
+                      <DataTrigger Binding="{Binding State}" Value="set">
+                        <Setter TargetName="chip" Property="Background" Value="{DynamicResource B.SuccessSoft}"/>
+                        <Setter TargetName="chipText" Property="Foreground" Value="{DynamicResource B.Success}"/>
+                      </DataTrigger>
+                      <DataTrigger Binding="{Binding State}" Value="otherRoot">
+                        <Setter TargetName="chip" Property="Background" Value="{DynamicResource B.WarningSoft}"/>
+                        <Setter TargetName="chipText" Property="Foreground" Value="{DynamicResource B.Warning}"/>
+                      </DataTrigger>
+                      <DataTrigger Binding="{Binding State}" Value="other">
+                        <Setter TargetName="chip" Property="Background" Value="{DynamicResource B.WarningSoft}"/>
+                        <Setter TargetName="chipText" Property="Foreground" Value="{DynamicResource B.Warning}"/>
+                      </DataTrigger>
+                    </DataTemplate.Triggers>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+            </Border>
+            <TextBlock x:Name="SteamAccountsEmpty" Style="{StaticResource Desc}" Margin="6,8,0,0" Visibility="Collapsed" Text="{DynamicResource s.steam.noAccounts}"/>
+
+            <TextBlock Style="{StaticResource Section}" Text="{DynamicResource s.steam.info}"/>
+            <Border Style="{StaticResource Card}">
+              <Grid>
+                <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                <Grid.RowDefinitions><RowDefinition/><RowDefinition/><RowDefinition/></Grid.RowDefinitions>
+                <TextBlock Text="{DynamicResource s.steam.root}" Foreground="{DynamicResource B.Text3}" Margin="0,4,24,4"/>
+                <TextBlock x:Name="SteamInfoRoot" Grid.Column="1" Margin="0,4" TextTrimming="CharacterEllipsis" Text="—"/>
+                <TextBlock Grid.Row="1" Text="{DynamicResource s.steam.appid}" Foreground="{DynamicResource B.Text3}" Margin="0,4,24,4"/>
+                <TextBlock x:Name="SteamInfoApp" Grid.Row="1" Grid.Column="1" Margin="0,4" Text="—"/>
+                <TextBlock Grid.Row="2" Text="{DynamicResource s.steam.state}" Foreground="{DynamicResource B.Text3}" Margin="0,4,24,4"/>
+                <TextBlock x:Name="SteamInfoRunning" Grid.Row="2" Grid.Column="1" Margin="0,4" Text="—"/>
+              </Grid>
+            </Border>
+
+            <TextBlock Style="{StaticResource Section}" Text="{DynamicResource s.steam.manual}"/>
+            <Border Style="{StaticResource Card}">
+              <StackPanel>
+                <Grid>
+                  <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                  <Border Width="22" Height="22" CornerRadius="11" Background="{DynamicResource B.AccentSoft}" VerticalAlignment="Top"><TextBlock Text="1" FontSize="11.5" FontWeight="SemiBold" Foreground="{DynamicResource B.Accent}" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border>
+                  <TextBlock Grid.Column="1" Margin="12,2,0,0" TextWrapping="Wrap" Text="{DynamicResource s.steam.step1}"/>
+                </Grid>
+                <Grid Margin="0,12,0,0">
+                  <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                  <Border Width="22" Height="22" CornerRadius="11" Background="{DynamicResource B.AccentSoft}" VerticalAlignment="Top"><TextBlock Text="2" FontSize="11.5" FontWeight="SemiBold" Foreground="{DynamicResource B.Accent}" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border>
+                  <TextBlock Grid.Column="1" Margin="12,2,0,0" TextWrapping="Wrap" Text="{DynamicResource s.steam.step2}"/>
+                </Grid>
+              </StackPanel>
+            </Border>
+          </StackPanel>
+        </ScrollViewer>
+
+        <!-- settings -->
+        <ScrollViewer x:Name="PageSettings" Visibility="Collapsed">
+          <StackPanel x:Name="SettingsStack" Margin="40,6,40,36">
+            <StackPanel>
+              <TextBlock Style="{StaticResource H1}" Text="{DynamicResource s.set.title}"/>
+              <TextBlock Style="{StaticResource Sub}" Text="{DynamicResource s.set.sub}" Margin="0,4,0,0"/>
+            </StackPanel>
+
+            <TextBlock Style="{StaticResource Section}" Text="{DynamicResource s.set.net}"/>
+            <Border Style="{StaticResource Card}">
+              <StackPanel>
+                <Grid>
+                  <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                  <StackPanel><TextBlock Style="{StaticResource H3}" Text="{DynamicResource s.set.auto}"/><TextBlock Style="{StaticResource Desc}" Text="{DynamicResource s.set.autoDesc}"/></StackPanel>
+                  <CheckBox x:Name="SetAutoMirror" Grid.Column="1" Style="{StaticResource Switch}" Margin="16,0,0,0"/>
+                </Grid>
+                <Border Style="{StaticResource Divider}"/>
+                <Grid>
+                  <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                  <StackPanel><TextBlock Style="{StaticResource H3}" Text="{DynamicResource s.set.sources}"/><TextBlock Style="{StaticResource Desc}" Text="{DynamicResource s.set.sourcesDesc}"/></StackPanel>
+                  <Button x:Name="SetReprobe" Grid.Column="1" Style="{StaticResource Secondary}" Margin="16,0,0,0" VerticalAlignment="Center">
+                    <Grid>
+                      <StackPanel x:Name="SetReprobeBody" Orientation="Horizontal"><TextBlock Style="{StaticResource Glyph}" Text="&#xE72C;" FontSize="12"/><TextBlock Margin="8,0,0,0" Text="{DynamicResource s.set.reprobe}"/></StackPanel>
+                      <ContentControl x:Name="SetReprobeSpin" Style="{StaticResource Spinner}" Width="16" Height="16" Visibility="Collapsed"/>
+                    </Grid>
+                  </Button>
+                </Grid>
+                <ItemsControl x:Name="NodeSources" Margin="-10,10,-10,0">
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                      <RadioButton Style="{StaticResource SourceRow}" GroupName="nodeSource" IsChecked="{Binding IsSelected, Mode=OneWay}" IsEnabled="{Binding IsEnabled}" Tag="source">
+                        <Grid>
+                          <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                          <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <TextBlock Text="{Binding Label}" FontWeight="SemiBold"/>
+                            <TextBlock Text="{Binding Host}" Margin="10,0,0,0" FontSize="12" Foreground="{DynamicResource B.Text3}" VerticalAlignment="Center"/>
+                          </StackPanel>
+                          <Border x:Name="fast" Grid.Column="1" Style="{StaticResource Chip}" Background="{DynamicResource B.AccentSoft}" Margin="0,0,8,0" Visibility="Collapsed">
+                            <TextBlock Text="{DynamicResource s.src.fastest}" FontSize="11.5" FontWeight="SemiBold" Foreground="{DynamicResource B.Accent}"/>
+                          </Border>
+                          <Border x:Name="pill" Grid.Column="2" Style="{StaticResource Chip}" MinWidth="68" Background="{DynamicResource B.SuccessSoft}">
+                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                              <Ellipse x:Name="pillDot" Width="6" Height="6" Fill="{DynamicResource B.Success}" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                              <TextBlock x:Name="pillText" Text="{Binding LatencyText}" FontSize="11.5" FontWeight="SemiBold" Foreground="{DynamicResource B.Success}"/>
+                            </StackPanel>
+                          </Border>
+                        </Grid>
+                      </RadioButton>
+                      <DataTemplate.Triggers>
+                        <DataTrigger Binding="{Binding IsFastest}" Value="True"><Setter TargetName="fast" Property="Visibility" Value="Visible"/></DataTrigger>
+                        <DataTrigger Binding="{Binding State}" Value="slow">
+                          <Setter TargetName="pill" Property="Background" Value="{DynamicResource B.WarningSoft}"/>
+                          <Setter TargetName="pillDot" Property="Fill" Value="{DynamicResource B.Warning}"/>
+                          <Setter TargetName="pillText" Property="Foreground" Value="{DynamicResource B.Warning}"/>
+                        </DataTrigger>
+                        <DataTrigger Binding="{Binding State}" Value="down">
+                          <Setter TargetName="pill" Property="Background" Value="{DynamicResource B.DangerSoft}"/>
+                          <Setter TargetName="pillDot" Property="Fill" Value="{DynamicResource B.Danger}"/>
+                          <Setter TargetName="pillText" Property="Foreground" Value="{DynamicResource B.Danger}"/>
+                        </DataTrigger>
+                        <DataTrigger Binding="{Binding State}" Value="testing">
+                          <Setter TargetName="pill" Property="Background" Value="{DynamicResource B.Surface2}"/>
+                          <Setter TargetName="pillDot" Property="Fill" Value="{DynamicResource B.Text3}"/>
+                          <Setter TargetName="pillText" Property="Foreground" Value="{DynamicResource B.Text3}"/>
+                        </DataTrigger>
+                      </DataTemplate.Triggers>
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+                <Border Style="{StaticResource Divider}"/>
+                <Grid>
+                  <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                  <StackPanel>
+                    <TextBlock Style="{StaticResource H3}" Text="{DynamicResource s.set.shinawase}"/>
+                    <TextBlock Style="{StaticResource Desc}" Text="{DynamicResource s.set.shinawaseDesc}"/>
+                    <ItemsControl x:Name="MirrorList" Margin="0,8,0,0">
+                      <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                          <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
+                            <Ellipse x:Name="dot" Width="7" Height="7" Fill="{DynamicResource B.Success}" VerticalAlignment="Center"/>
+                            <TextBlock Text="{Binding Host}" FontSize="12.5" Foreground="{DynamicResource B.Text2}" Margin="8,0,0,0"/>
+                            <TextBlock x:Name="lat" Text="{Binding LatencyText}" FontSize="12.5" Foreground="{DynamicResource B.Text3}" Margin="8,0,0,0"/>
+                          </StackPanel>
+                          <DataTemplate.Triggers>
+                            <DataTrigger Binding="{Binding State}" Value="down"><Setter TargetName="dot" Property="Fill" Value="{DynamicResource B.Danger}"/></DataTrigger>
+                            <DataTrigger Binding="{Binding State}" Value="slow"><Setter TargetName="dot" Property="Fill" Value="{DynamicResource B.Warning}"/></DataTrigger>
+                            <DataTrigger Binding="{Binding State}" Value="testing"><Setter TargetName="dot" Property="Fill" Value="{DynamicResource B.Text3}"/></DataTrigger>
+                          </DataTemplate.Triggers>
+                        </DataTemplate>
+                      </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                  </StackPanel>
+                  <CheckBox x:Name="SetShinawase" Grid.Column="1" Style="{StaticResource Switch}" Margin="16,0,0,0" VerticalAlignment="Top"/>
+                </Grid>
+              </StackPanel>
+            </Border>
+
+            <TextBlock Style="{StaticResource Section}" Text="{DynamicResource s.set.updates}"/>
+            <Border Style="{StaticResource Card}">
+              <StackPanel>
+                <Grid>
+                  <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                  <StackPanel><TextBlock Style="{StaticResource H3}" Text="{DynamicResource s.set.autoCheck}"/><TextBlock Style="{StaticResource Desc}" Text="{DynamicResource s.set.autoCheckDesc}"/></StackPanel>
+                  <CheckBox x:Name="SetAutoCheck" Grid.Column="1" Style="{StaticResource Switch}" Margin="16,0,0,0"/>
+                </Grid>
+                <Border Style="{StaticResource Divider}"/>
+                <Grid>
+                  <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                  <StackPanel><TextBlock Style="{StaticResource H3}" Text="{DynamicResource s.set.loaderAuto}"/><TextBlock Style="{StaticResource Desc}" Text="{DynamicResource s.set.loaderAutoDesc}"/></StackPanel>
+                  <CheckBox x:Name="SetLoaderAuto" Grid.Column="1" Style="{StaticResource Switch}" Margin="16,0,0,0"/>
+                </Grid>
+                <Border Style="{StaticResource Divider}"/>
+                <Grid>
+                  <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                  <StackPanel VerticalAlignment="Center">
+                    <TextBlock x:Name="SetVersionLine" Style="{StaticResource H3}" Text="—"/>
+                    <TextBlock x:Name="SetVersionSub" Style="{StaticResource Desc}" Text=" "/>
+                  </StackPanel>
+                  <Button x:Name="SetCheckNow" Grid.Column="1" Style="{StaticResource Secondary}" Margin="16,0,0,0" Content="{DynamicResource s.set.checkNow}"/>
+                </Grid>
+              </StackPanel>
+            </Border>
+
+            <TextBlock Style="{StaticResource Section}" Text="{DynamicResource s.set.look}"/>
+            <Border Style="{StaticResource Card}">
+              <StackPanel>
+                <Grid>
+                  <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                  <TextBlock Style="{StaticResource H3}" Text="{DynamicResource s.set.theme}" VerticalAlignment="Center"/>
+                  <Border Grid.Column="1" Style="{StaticResource SegmentHost}">
+                    <StackPanel Orientation="Horizontal">
+                      <RadioButton x:Name="ThemeSystem" Style="{StaticResource Segment}" GroupName="theme" Content="{DynamicResource s.set.themeSystem}"/>
+                      <RadioButton x:Name="ThemeLight" Style="{StaticResource Segment}" GroupName="theme" Content="{DynamicResource s.set.themeLight}"/>
+                      <RadioButton x:Name="ThemeDark" Style="{StaticResource Segment}" GroupName="theme" Content="{DynamicResource s.set.themeDark}"/>
+                    </StackPanel>
+                  </Border>
+                </Grid>
+                <Border Style="{StaticResource Divider}"/>
+                <Grid>
+                  <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                  <TextBlock Style="{StaticResource H3}" Text="{DynamicResource s.set.lang}" VerticalAlignment="Center"/>
+                  <Border Grid.Column="1" Style="{StaticResource SegmentHost}">
+                    <StackPanel Orientation="Horizontal">
+                      <RadioButton x:Name="SetLangZh" Style="{StaticResource Segment}" GroupName="setLang" Content="中文"/>
+                      <RadioButton x:Name="SetLangEn" Style="{StaticResource Segment}" GroupName="setLang" Content="English"/>
+                    </StackPanel>
+                  </Border>
+                </Grid>
+                <Border Style="{StaticResource Divider}"/>
+                <Grid>
+                  <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                  <StackPanel><TextBlock Style="{StaticResource H3}" Text="{DynamicResource s.set.motion}"/><TextBlock Style="{StaticResource Desc}" Text="{DynamicResource s.set.motionDesc}"/></StackPanel>
+                  <CheckBox x:Name="SetMotion" Grid.Column="1" Style="{StaticResource Switch}" Margin="16,0,0,0"/>
+                </Grid>
+              </StackPanel>
+            </Border>
+
+            <TextBlock Style="{StaticResource Section}" Text="{DynamicResource s.set.tools}"/>
+            <Border Style="{StaticResource Card}">
+              <StackPanel>
+                <Grid>
+                  <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                  <StackPanel><TextBlock Style="{StaticResource H3}" Text="{DynamicResource s.set.logs}"/><TextBlock Style="{StaticResource Desc}" Text="{DynamicResource s.set.logsDesc}"/></StackPanel>
+                  <Button x:Name="SetOpenLogs" Grid.Column="1" Style="{StaticResource Secondary}" Margin="16,0,0,0" Content="{DynamicResource s.set.open}"/>
+                </Grid>
+                <Border Style="{StaticResource Divider}"/>
+                <Grid>
+                  <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                  <StackPanel><TextBlock Style="{StaticResource H3}" Text="{DynamicResource s.set.loaderDir}"/><TextBlock Style="{StaticResource Desc}" Text="{DynamicResource s.set.loaderDirDesc}"/></StackPanel>
+                  <Button x:Name="SetOpenLoader" Grid.Column="1" Style="{StaticResource Secondary}" Margin="16,0,0,0" Content="{DynamicResource s.set.open}"/>
+                </Grid>
+                <Border Style="{StaticResource Divider}"/>
+                <Grid>
+                  <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                  <StackPanel><TextBlock Style="{StaticResource H3}" Text="{DynamicResource s.set.debug}"/><TextBlock Style="{StaticResource Desc}" Text="{DynamicResource s.set.debugDesc}"/></StackPanel>
+                  <Button x:Name="SetDebug" Grid.Column="1" Style="{StaticResource Secondary}" Margin="16,0,0,0" Content="{DynamicResource s.set.launch}"/>
+                </Grid>
+                <Border Style="{StaticResource Divider}"/>
+                <Grid>
+                  <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                  <StackPanel><TextBlock Style="{StaticResource H3}" Text="{DynamicResource s.set.safe}"/><TextBlock Style="{StaticResource Desc}" Text="{DynamicResource s.set.safeDesc}"/></StackPanel>
+                  <Button x:Name="SetSafe" Grid.Column="1" Style="{StaticResource Secondary}" Margin="16,0,0,0" Content="{DynamicResource s.set.launch}"/>
+                </Grid>
+              </StackPanel>
+            </Border>
+
+            <TextBlock Style="{StaticResource Section}" Text="{DynamicResource s.set.danger}"/>
+            <Border Style="{StaticResource Card}" BorderBrush="{DynamicResource B.DangerSoft}">
+              <Grid>
+                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                <StackPanel><TextBlock Style="{StaticResource H3}" Text="{DynamicResource s.set.uninstall}"/><TextBlock Style="{StaticResource Desc}" Text="{DynamicResource s.set.uninstallDesc}"/></StackPanel>
+                <Button x:Name="SetUninstall" Grid.Column="1" Style="{StaticResource Danger}" Margin="16,0,0,0" Content="{DynamicResource s.set.uninstallBtn}"/>
+              </Grid>
+            </Border>
+          </StackPanel>
+        </ScrollViewer>
+
+        <!-- about -->
+        <ScrollViewer x:Name="PageAbout" Visibility="Collapsed">
+          <StackPanel x:Name="AboutStack" Margin="40,6,40,36">
+            <Grid>
+              <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+              <Image x:Name="AboutLogo" Width="72" Height="72"/>
+              <StackPanel Grid.Column="1" Margin="18,0,0,0" VerticalAlignment="Center">
+                <TextBlock Style="{StaticResource H1}" Text="ShinawaseLoader"/>
+                <TextBlock x:Name="AboutVersion" Style="{StaticResource Sub}" Margin="0,4,0,0" Text=" "/>
+              </StackPanel>
+            </Grid>
+            <TextBlock Style="{StaticResource Sub}" Text="{DynamicResource s.about.summary}" Margin="0,22,0,0"/>
+            <Grid Margin="0,22,0,0">
+              <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="12"/><ColumnDefinition Width="*"/><ColumnDefinition Width="12"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+              <Border Style="{StaticResource Card}">
+                <StackPanel><TextBlock Text="{DynamicResource s.about.manager}" FontSize="12.5" Foreground="{DynamicResource B.Text3}"/><TextBlock x:Name="AboutManager" FontSize="18" FontWeight="SemiBold" Margin="0,4,0,0" Text="—"/></StackPanel>
+              </Border>
+              <Border Grid.Column="2" Style="{StaticResource Card}">
+                <StackPanel><TextBlock Text="{DynamicResource s.about.installed}" FontSize="12.5" Foreground="{DynamicResource B.Text3}"/><TextBlock x:Name="AboutInstalled" FontSize="18" FontWeight="SemiBold" Margin="0,4,0,0" Text="—"/></StackPanel>
+              </Border>
+              <Border Grid.Column="4" Style="{StaticResource Card}">
+                <StackPanel><TextBlock Text="{DynamicResource s.about.remote}" FontSize="12.5" Foreground="{DynamicResource B.Text3}"/><TextBlock x:Name="AboutRemote" FontSize="18" FontWeight="SemiBold" Margin="0,4,0,0" Text="—"/></StackPanel>
+              </Border>
+            </Grid>
+            <TextBlock Style="{StaticResource Section}" Text="{DynamicResource s.about.disclaimer}"/>
+            <Border Style="{StaticResource Card}">
+              <StackPanel>
+                <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions><Ellipse Width="6" Height="6" Fill="{DynamicResource B.Accent}" VerticalAlignment="Top" Margin="0,7,0,0"/><TextBlock Grid.Column="1" Margin="12,0,0,0" TextWrapping="Wrap" Text="{DynamicResource s.consent.boundary}"/></Grid>
+                <Grid Margin="0,10,0,0"><Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions><Ellipse Width="6" Height="6" Fill="{DynamicResource B.Accent}" VerticalAlignment="Top" Margin="0,7,0,0"/><TextBlock Grid.Column="1" Margin="12,0,0,0" TextWrapping="Wrap" Text="{DynamicResource s.consent.rules}"/></Grid>
+                <Grid Margin="0,10,0,0"><Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions><Ellipse Width="6" Height="6" Fill="{DynamicResource B.Accent}" VerticalAlignment="Top" Margin="0,7,0,0"/><TextBlock Grid.Column="1" Margin="12,0,0,0" TextWrapping="Wrap" Text="{DynamicResource s.consent.packages}"/></Grid>
+              </StackPanel>
+            </Border>
+            <StackPanel Orientation="Horizontal" Margin="0,18,0,0">
+              <Button x:Name="AboutGithub" Style="{StaticResource Secondary}">
+                <StackPanel Orientation="Horizontal"><TextBlock Style="{StaticResource Glyph}" Text="&#xE71B;" FontSize="13"/><TextBlock Margin="8,0,0,0" Text="{DynamicResource s.about.github}"/></StackPanel>
+              </Button>
+              <Button x:Name="AboutLogs" Style="{StaticResource Ghost}" Margin="10,0,0,0" Content="{DynamicResource s.about.logs}"/>
+            </StackPanel>
+          </StackPanel>
+        </ScrollViewer>
+      </Grid>
+
+      <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Top">
+        <Button x:Name="BtnMin" Style="{StaticResource CaptionBtn}" Content="&#xE921;" ToolTip="{DynamicResource s.min}"/>
+        <Button x:Name="BtnClose" Style="{StaticResource CaptionClose}" Content="&#xE8BB;" ToolTip="{DynamicResource s.close}"/>
+      </StackPanel>
+    </Grid>
+
+    <!-- ================= drop overlay ================= -->
+    <Grid x:Name="DropLayer" Grid.ColumnSpan="2" Visibility="Collapsed" Opacity="0" IsHitTestVisible="False">
+      <Border Background="{DynamicResource B.Backdrop}"/>
+      <Rectangle Margin="26" RadiusX="22" RadiusY="22" Stroke="{DynamicResource B.Accent}" StrokeThickness="2" StrokeDashArray="5 4" Fill="{DynamicResource B.AccentSoft}"/>
+      <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+        <Border x:Name="DropBadge" Width="72" Height="72" CornerRadius="22" Background="{DynamicResource B.Accent}" RenderTransformOrigin="0.5,0.5">
+          <Border.RenderTransform><ScaleTransform x:Name="DropScale"/></Border.RenderTransform>
+          <TextBlock Style="{StaticResource Glyph}" Text="&#xE8B5;" FontSize="28" Foreground="#FFFFFF"/>
+        </Border>
+        <TextBlock Text="{DynamicResource s.mods.drop}" FontSize="20" FontWeight="SemiBold" HorizontalAlignment="Center" Margin="0,18,0,0" Foreground="#FFFFFF"/>
+        <TextBlock Text="{DynamicResource s.mods.dropHint}" FontSize="13" HorizontalAlignment="Center" Margin="0,6,0,0" Foreground="#CCFFFFFF"/>
+      </StackPanel>
+    </Grid>
+
+    <!-- ================= install sheet ================= -->
+    <Grid x:Name="SheetLayer" Grid.ColumnSpan="2" Visibility="Collapsed">
+      <Border x:Name="SheetBackdrop" Background="{DynamicResource B.Backdrop}" Opacity="0"/>
+      <Grid x:Name="SheetPanel" Width="740" Height="580" RenderTransformOrigin="0.5,0.5" Opacity="0">
+        <Grid.RenderTransform>
+          <TransformGroup><ScaleTransform x:Name="SheetScale" ScaleX="0.96" ScaleY="0.96"/><TranslateTransform x:Name="SheetShift" Y="18"/></TransformGroup>
+        </Grid.RenderTransform>
+        <Border CornerRadius="20" Background="{DynamicResource B.Surface}">
+          <Border.Effect><DropShadowEffect BlurRadius="48" ShadowDepth="14" Direction="270" Opacity="{DynamicResource ShadowOpacity}" Color="#000000"/></Border.Effect>
+        </Border>
+        <Border CornerRadius="20" Background="{DynamicResource B.Surface}" BorderBrush="{DynamicResource B.Border}" BorderThickness="1">
+          <Grid Margin="30,26,30,22">
+            <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+            <Grid>
+              <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+              <StackPanel x:Name="SheetHeader">
+                <TextBlock x:Name="SheetTitle" FontSize="21" FontWeight="SemiBold" FontFamily="Segoe UI Variable Display, Segoe UI, Microsoft YaHei UI" Text=" "/>
+                <TextBlock x:Name="SheetSub" Style="{StaticResource Sub}" Margin="0,4,0,0" Text=" "/>
+              </StackPanel>
+              <StackPanel x:Name="SheetDots" Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,14,0">
+                <Border Width="22" Height="6" CornerRadius="3" Margin="3,0" Background="{DynamicResource B.Accent}"/>
+                <Border Width="6" Height="6" CornerRadius="3" Margin="3,0" Background="{DynamicResource B.BorderStrong}"/>
+                <Border Width="6" Height="6" CornerRadius="3" Margin="3,0" Background="{DynamicResource B.BorderStrong}"/>
+                <Border Width="6" Height="6" CornerRadius="3" Margin="3,0" Background="{DynamicResource B.BorderStrong}"/>
+              </StackPanel>
+              <Button x:Name="SheetClose" Grid.Column="2" Style="{StaticResource IconBtn}" Content="&#xE8BB;" FontSize="11" VerticalAlignment="Top" Margin="0,-4,-8,0"/>
+            </Grid>
+
+            <Grid x:Name="SheetBody" Grid.Row="1" Margin="0,20,0,14">
+              <!-- choose target -->
+              <Grid x:Name="ViewSelect">
+                <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                <ScrollViewer x:Name="TargetsScroll">
+                  <StackPanel Margin="0,0,14,0">
+                    <ItemsControl x:Name="TargetsList">
+                      <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                          <RadioButton Style="{StaticResource TargetCard}" GroupName="targets" IsChecked="{Binding IsSelected, Mode=TwoWay}">
+                            <Grid>
+                              <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                              <Border Width="42" Height="42" CornerRadius="12" Background="{DynamicResource B.AccentSoft}" VerticalAlignment="Top"><TextBlock Style="{StaticResource Glyph}" Text="&#xE7FC;" Foreground="{DynamicResource B.Accent}" FontSize="17"/></Border>
+                              <StackPanel Grid.Column="1" Margin="14,0,0,0">
+                                <StackPanel Orientation="Horizontal">
+                                  <TextBlock Text="{Binding Title}" FontWeight="SemiBold" FontSize="14.5"/>
+                                  <Border Style="{StaticResource Chip}" Margin="8,0,0,0" Padding="7,1"><TextBlock Text="{Binding RankText}" FontSize="11" Foreground="{DynamicResource B.Text2}"/></Border>
+                                </StackPanel>
+                                <TextBlock Text="{Binding PathText}" FontSize="12.5" Foreground="{DynamicResource B.Text2}" Margin="0,3,0,0" TextTrimming="CharacterEllipsis"/>
+                                <TextBlock Text="{Binding DetailText}" FontSize="12" Foreground="{DynamicResource B.Text3}" Margin="0,2,0,0"/>
+                              </StackPanel>
+                            </Grid>
+                          </RadioButton>
+                        </DataTemplate>
+                      </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <Border x:Name="TargetsEmpty" CornerRadius="14" Background="{DynamicResource B.Surface2}" Padding="20" Visibility="Collapsed">
+                      <StackPanel Orientation="Horizontal">
+                        <TextBlock Style="{StaticResource Glyph}" Text="&#xE7BA;" Foreground="{DynamicResource B.Warning}"/>
+                        <TextBlock Margin="12,0,0,0" Text="{DynamicResource s.wiz.none}" TextWrapping="Wrap" Foreground="{DynamicResource B.Text2}"/>
+                      </StackPanel>
+                    </Border>
+                  </StackPanel>
+                </ScrollViewer>
+                <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,12,0,0">
+                  <Button x:Name="TargetBrowse" Style="{StaticResource Secondary}">
+                    <StackPanel Orientation="Horizontal"><TextBlock Style="{StaticResource Glyph}" Text="&#xE838;" FontSize="13"/><TextBlock Margin="8,0,0,0" Text="{DynamicResource s.wiz.browse}"/></StackPanel>
+                  </Button>
+                  <Button x:Name="TargetRescan" Style="{StaticResource Ghost}" Margin="8,0,0,0">
+                    <StackPanel Orientation="Horizontal"><TextBlock Style="{StaticResource Glyph}" Text="&#xE72C;" FontSize="12"/><TextBlock Margin="8,0,0,0" Text="{DynamicResource s.btn.rescan}"/></StackPanel>
+                  </Button>
+                </StackPanel>
+              </Grid>
+
+              <!-- options -->
+              <ScrollViewer x:Name="ViewOptions" Visibility="Collapsed">
+                <StackPanel Margin="0,0,14,0">
+                  <Border x:Name="OptLatestRow" CornerRadius="14" Background="{DynamicResource B.AccentSoft}" Padding="16,14" Margin="0,0,0,6">
+                    <Grid>
+                      <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                      <TextBlock Style="{StaticResource Glyph}" Text="&#xE896;" Foreground="{DynamicResource B.Accent}" VerticalAlignment="Top" Margin="0,2,0,0"/>
+                      <StackPanel Grid.Column="1" Margin="12,0,12,0"><TextBlock x:Name="OptLatestTitle" Style="{StaticResource H3}" Text=" "/><TextBlock x:Name="OptLatestDesc" Style="{StaticResource Desc}" Text=" "/></StackPanel>
+                      <CheckBox x:Name="OptLatest" Grid.Column="2" Style="{StaticResource Switch}"/>
+                    </Grid>
+                  </Border>
+                  <DockPanel Margin="4,14,0,8">
+                    <Button x:Name="PkgInstallAll" DockPanel.Dock="Right" Style="{StaticResource Link}" Content="{DynamicResource s.wiz.installAll}"/>
+                    <TextBlock Style="{StaticResource Section}" Margin="0" Text="{DynamicResource s.wiz.packages}"/>
+                  </DockPanel>
+                  <ItemsControl x:Name="PkgList">
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate>
+                        <Border CornerRadius="14" Background="{DynamicResource B.Surface2}" BorderBrush="{DynamicResource B.Border}" BorderThickness="1" Padding="16,12" Margin="0,0,0,8">
+                          <Grid>
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                            <Border Width="36" Height="36" CornerRadius="10">
+                              <Border.Background><LinearGradientBrush StartPoint="0,0" EndPoint="1,1"><GradientStop Color="#8A6CF7" Offset="0"/><GradientStop Color="#4B55E8" Offset="1"/></LinearGradientBrush></Border.Background>
+                              <TextBlock Style="{StaticResource Glyph}" Text="&#xE8D6;" Foreground="#FFFFFF" FontSize="14"/>
+                            </Border>
+                            <StackPanel Grid.Column="1" Margin="14,0,12,0" VerticalAlignment="Center">
+                              <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="{Binding Name}" FontWeight="SemiBold"/>
+                                <TextBlock Text="{Binding VersionText}" FontSize="12" Foreground="{DynamicResource B.Text3}" Margin="8,0,0,0" VerticalAlignment="Center"/>
+                              </StackPanel>
+                              <TextBlock Text="{Binding Description}" FontSize="12.5" Foreground="{DynamicResource B.Text2}" Margin="0,2,0,0"/>
+                            </StackPanel>
+                            <CheckBox Grid.Column="2" Style="{StaticResource Switch}" IsChecked="{Binding IsSelected, Mode=TwoWay}"/>
+                          </Grid>
+                        </Border>
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+                  <TextBlock Style="{StaticResource Section}" Margin="4,14,0,8" Text="{DynamicResource s.wiz.integration}"/>
+                  <Border CornerRadius="14" Background="{DynamicResource B.Surface2}" BorderBrush="{DynamicResource B.Border}" BorderThickness="1" Padding="16,6">
+                    <StackPanel>
+                      <Grid Margin="0,8">
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                        <StackPanel><TextBlock FontWeight="SemiBold" Text="{DynamicResource s.wiz.optSteam}"/><TextBlock Style="{StaticResource Desc}" Text="{DynamicResource s.wiz.optSteamDesc}"/></StackPanel>
+                        <CheckBox x:Name="OptSteam" Grid.Column="1" Style="{StaticResource Switch}"/>
+                      </Grid>
+                      <Border Style="{StaticResource Divider}" Margin="0,2"/>
+                      <Grid Margin="0,8">
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                        <StackPanel><TextBlock FontWeight="SemiBold" Text="{DynamicResource s.wiz.optShortcut}"/><TextBlock Style="{StaticResource Desc}" Text="{DynamicResource s.wiz.optShortcutDesc}"/></StackPanel>
+                        <CheckBox x:Name="OptShortcut" Grid.Column="1" Style="{StaticResource Switch}"/>
+                      </Grid>
+                      <Border Style="{StaticResource Divider}" Margin="0,2"/>
+                      <Grid Margin="0,8">
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                        <StackPanel><TextBlock FontWeight="SemiBold" Text="{DynamicResource s.wiz.optDesktop}"/><TextBlock Style="{StaticResource Desc}" Text="{DynamicResource s.wiz.optDesktopDesc}"/></StackPanel>
+                        <CheckBox x:Name="OptDesktop" Grid.Column="1" Style="{StaticResource Switch}"/>
+                      </Grid>
+                      <Border Style="{StaticResource Divider}" Margin="0,2"/>
+                      <Grid Margin="0,8">
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                        <StackPanel><TextBlock FontWeight="SemiBold" Text="{DynamicResource s.wiz.optLaunch}"/><TextBlock Style="{StaticResource Desc}" Text="{DynamicResource s.wiz.optLaunchDesc}"/></StackPanel>
+                        <CheckBox x:Name="OptLaunch" Grid.Column="1" Style="{StaticResource Switch}"/>
+                      </Grid>
+                    </StackPanel>
+                  </Border>
+                </StackPanel>
+              </ScrollViewer>
+
+              <!-- progress -->
+              <Grid x:Name="ViewProgress" Visibility="Collapsed">
+                <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+                <StackPanel>
+                  <Grid>
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                    <TextBlock x:Name="ProgressPercent" FontSize="34" FontWeight="SemiBold" FontFamily="Segoe UI Variable Display, Segoe UI" Text="0%" VerticalAlignment="Bottom"/>
+                    <TextBlock x:Name="ProgressDetail" Grid.Column="1" Margin="16,0,0,7" VerticalAlignment="Bottom" HorizontalAlignment="Right" FontSize="12.5" Foreground="{DynamicResource B.Text2}" TextTrimming="CharacterEllipsis" Text=" "/>
+                  </Grid>
+                  <Grid x:Name="ProgressTrack" Height="8" Margin="0,12,0,0" ClipToBounds="True">
+                    <Border CornerRadius="4" Background="{DynamicResource B.Track}"/>
+                    <Border x:Name="ProgressFill" CornerRadius="4" RenderTransformOrigin="0,0.5" ClipToBounds="True">
+                      <Border.Background>
+                        <LinearGradientBrush StartPoint="0,0" EndPoint="1,0"><GradientStop Color="#8A6CF7" Offset="0"/><GradientStop Color="#4B55E8" Offset="1"/></LinearGradientBrush>
+                      </Border.Background>
+                      <Border.RenderTransform><ScaleTransform x:Name="ProgressScale" ScaleX="0"/></Border.RenderTransform>
+                    </Border>
+                    <Border x:Name="ProgressSheen" Width="140" HorizontalAlignment="Left" CornerRadius="4" IsHitTestVisible="False">
+                      <Border.Background>
+                        <LinearGradientBrush StartPoint="0,0" EndPoint="1,0"><GradientStop Color="#00FFFFFF" Offset="0"/><GradientStop Color="#55FFFFFF" Offset="0.5"/><GradientStop Color="#00FFFFFF" Offset="1"/></LinearGradientBrush>
+                      </Border.Background>
+                      <Border.RenderTransform><TranslateTransform x:Name="SheenShift" X="-140"/></Border.RenderTransform>
+                    </Border>
+                  </Grid>
+                </StackPanel>
+                <Grid Grid.Row="1" Margin="0,18,0,0">
+                  <ScrollViewer x:Name="StepsScroll">
+                    <ItemsControl x:Name="StepsList" ItemTemplate="{StaticResource StepTemplate}"/>
+                  </ScrollViewer>
+                  <Border x:Name="LogPanel" CornerRadius="12" Background="{DynamicResource B.CodeBg}" BorderBrush="{DynamicResource B.Border}" BorderThickness="1" Visibility="Collapsed" Opacity="0">
+                    <TextBox x:Name="LogBox" Style="{StaticResource LogBox}" Padding="14,10"/>
+                  </Border>
+                </Grid>
+              </Grid>
+
+              <!-- done -->
+              <Grid x:Name="ViewDone" Visibility="Collapsed">
+                <ScrollViewer>
+                  <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" MaxWidth="560" Margin="0,6,0,0">
+                    <Grid x:Name="DoneBadge" Width="88" Height="88" HorizontalAlignment="Center" RenderTransformOrigin="0.5,0.5">
+                      <Grid.RenderTransform><ScaleTransform x:Name="DoneScale"/></Grid.RenderTransform>
+                      <Ellipse x:Name="DoneHalo" Fill="{DynamicResource B.SuccessSoft}"/>
+                      <Ellipse x:Name="DoneDisc" Width="64" Height="64" Fill="{DynamicResource B.Success}"/>
+                      <Path x:Name="DoneCheck" Data="M 30,45 L 40,55 L 59,35" Stroke="#FFFFFF" StrokeThickness="5" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" StrokeDashArray="10 10" StrokeDashOffset="10"/>
+                      <Path x:Name="DoneCross" Data="M 34,34 L 54,54 M 54,34 L 34,54" Stroke="#FFFFFF" StrokeThickness="5" StrokeStartLineCap="Round" StrokeEndLineCap="Round" Visibility="Collapsed"/>
+                    </Grid>
+                    <TextBlock x:Name="DoneTitle" FontSize="22" FontWeight="SemiBold" HorizontalAlignment="Center" Margin="0,18,0,0" Text=" "/>
+                    <TextBlock x:Name="DoneSub" Style="{StaticResource Sub}" HorizontalAlignment="Center" TextAlignment="Center" Margin="0,6,0,0" Text=" "/>
+                    <Border x:Name="DoneSummaryCard" CornerRadius="14" Background="{DynamicResource B.Surface2}" Padding="18,12" Margin="0,20,0,0">
+                      <StackPanel x:Name="DoneSummary"/>
+                    </Border>
+                    <Border x:Name="DoneSteamCard" CornerRadius="14" Background="{DynamicResource B.WarningSoft}" Padding="16,14" Margin="0,12,0,0" Visibility="Collapsed">
+                      <Grid>
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                        <TextBlock Style="{StaticResource Glyph}" Text="&#xE7FC;" Foreground="{DynamicResource B.Warning}" VerticalAlignment="Top" Margin="0,2,0,0"/>
+                        <StackPanel Grid.Column="1" Margin="12,0,0,0">
+                          <TextBlock x:Name="DoneSteamText" TextWrapping="Wrap" Text="{DynamicResource s.wiz.steamPendingBody}"/>
+                          <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                            <Button x:Name="DoneSteamApply" Style="{StaticResource Primary}" Height="32">
+                              <Grid>
+                                <TextBlock x:Name="DoneSteamApplyText" Text="{DynamicResource s.wiz.steamPendingBtn}"/>
+                                <ContentControl x:Name="DoneSteamSpin" Style="{StaticResource Spinner}" Foreground="#FFFFFF" Width="16" Height="16" Visibility="Collapsed"/>
+                              </Grid>
+                            </Button>
+                            <Button x:Name="DoneSteamLater" Style="{StaticResource Ghost}" Height="32" Margin="6,0,0,0" Content="{DynamicResource s.wiz.steamLater}"/>
+                          </StackPanel>
+                        </StackPanel>
+                      </Grid>
+                    </Border>
+                  </StackPanel>
+                </ScrollViewer>
+              </Grid>
+            </Grid>
+
+            <Grid Grid.Row="2">
+              <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+              <Button x:Name="SheetAux" Style="{StaticResource Ghost}" Visibility="Collapsed"/>
+              <StackPanel Grid.Column="2" Orientation="Horizontal">
+                <Button x:Name="SheetBack" Style="{StaticResource Secondary}" MinWidth="96"/>
+                <Button x:Name="SheetNext" Style="{StaticResource Primary}" MinWidth="120" Margin="10,0,0,0"/>
+              </StackPanel>
+            </Grid>
+          </Grid>
+        </Border>
+      </Grid>
+    </Grid>
+
+    <!-- ================= dialog ================= -->
+    <Grid x:Name="DialogLayer" Grid.ColumnSpan="2" Visibility="Collapsed">
+      <Border x:Name="DialogBackdrop" Background="{DynamicResource B.Backdrop}" Opacity="0"/>
+      <Grid x:Name="DialogPanel" Width="480" HorizontalAlignment="Center" VerticalAlignment="Center" RenderTransformOrigin="0.5,0.5" Opacity="0">
+        <Grid.RenderTransform><ScaleTransform x:Name="DialogScale" ScaleX="0.95" ScaleY="0.95"/></Grid.RenderTransform>
+        <Border CornerRadius="18" Background="{DynamicResource B.Surface}">
+          <Border.Effect><DropShadowEffect BlurRadius="44" ShadowDepth="12" Direction="270" Opacity="{DynamicResource ShadowOpacity}" Color="#000000"/></Border.Effect>
+        </Border>
+        <Border CornerRadius="18" Background="{DynamicResource B.Surface}" BorderBrush="{DynamicResource B.Border}" BorderThickness="1" Padding="26,24,26,20">
+          <StackPanel>
+            <Border x:Name="DialogBadge" Width="44" Height="44" CornerRadius="13" HorizontalAlignment="Left" Background="{DynamicResource B.AccentSoft}">
+              <TextBlock x:Name="DialogGlyph" Style="{StaticResource Glyph}" FontSize="18" Text="&#xE946;" Foreground="{DynamicResource B.Accent}"/>
+            </Border>
+            <TextBlock x:Name="DialogTitle" FontSize="18" FontWeight="SemiBold" Margin="0,16,0,8" TextWrapping="Wrap" Text=" "/>
+            <ContentControl x:Name="DialogBody" Focusable="False"/>
+            <Grid Margin="0,22,0,0">
+              <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                <Button x:Name="DialogSecondary" Style="{StaticResource Secondary}" MinWidth="96"/>
+                <Button x:Name="DialogPrimary" Style="{StaticResource Primary}" MinWidth="110" Margin="10,0,0,0"/>
+              </StackPanel>
+            </Grid>
+          </StackPanel>
+        </Border>
+      </Grid>
+    </Grid>
+
+    <!-- ================= toasts ================= -->
+    <StackPanel x:Name="ToastHost" Grid.ColumnSpan="2" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,24,22" IsHitTestVisible="True"/>
+  </Grid>
+</Window>

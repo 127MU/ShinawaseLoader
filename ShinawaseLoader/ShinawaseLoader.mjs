@@ -8,6 +8,7 @@ import { spawn } from 'node:child_process';
 import { createHash, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import { isZip, readZip } from './echomod-archive.mjs';
 import { copy as i18nCopy, normalizeLocale } from './i18n.mjs';
+import { PATCH_REVISION } from './echo-asar.mjs';
 import { fingerprintStock, readRuntimeFingerprint, syncModdedRuntime } from './runtime-sync.mjs';
 import { DEFAULT_UPDATE_MIRRORS, UPDATE_PACKAGES, UPDATE_REPO, acquireLock, createDeadline, createSourceHealth, dropStaleCache, fetchBuffer, fetchFirstValid, fetchSmallFromSources, isNetworkFailure, normalizeMirrorBases, parseMirrorManifest } from './update-net.mjs';
 import {
@@ -174,6 +175,8 @@ const defaultUiSettings = Object.freeze({
   // Default off: the Steam launch reminder popup is opt-in.
   steamLaunchReminder: false,
   showTitlebarBrand: true,
+  // Read by startup-splash.cjs inside ECHO at the next launch.
+  startupSplash: true,
 });
 const sanitizeUiSettings = (value) => {
   const input = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
@@ -192,6 +195,7 @@ const sanitizeUiSettings = (value) => {
     modFilter: pick('modFilter', ['all', 'active', 'inactive']),
     steamLaunchReminder: bool('steamLaunchReminder'),
     showTitlebarBrand: bool('showTitlebarBrand'),
+    startupSplash: bool('startupSplash'),
   };
 };
 
@@ -1740,7 +1744,7 @@ const injectEnabled = async () => {
       const targetState = probe?.result?.value;
       if (targetState?.ready !== true) continue;
       lastCycleReadyCount += 1;
-      const uiReloaded = targetState.uiVersion < 64;
+      const uiReloaded = targetState.uiVersion < 65;
       // Replacing a live UI drops the sidebar pages mods registered on it, so
       // those mods have to run again (dispose + inject, as on disable/enable).
       const uiReplaced = uiReloaded && targetState.uiVersion > 0;
@@ -2189,7 +2193,8 @@ const describeRuntimeSync = () => {
     const stock = fingerprintStock(echoRoot);
     const previous = readRuntimeFingerprint(root);
     const current = previous?.asarSha256 === stock.asarSha256
-      && (previous?.patchStatus === 'patched' || previous?.patchStatus === 'already-patched');
+      && (previous?.patchStatus === 'patched' || previous?.patchStatus === 'already-patched')
+      && (Number(previous?.patchRevision) || 1) >= PATCH_REVISION;
     return {
       ok: true,
       current,

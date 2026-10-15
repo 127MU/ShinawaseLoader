@@ -45,10 +45,12 @@ const copy = {
     : 'Show the floating candidate panel during network matching. Off by default.',
   rematchTitle: chinese ? '重新匹配' : 'Rematch lyrics',
   rematchHint: chinese
-    ? '清理当前缓存并重新查找'
-    : 'Clear the current cache and search again',
+    ? '手动搜索并选择歌词候选'
+    : 'Search and choose lyrics candidates',
   rematchAction: chinese ? '匹配' : 'Match',
   rematchBusy: chinese ? '匹配中…' : 'Matching…',
+  allSources: chinese ? '全部来源' : 'All sources',
+  emptySources: chinese ? '候选返回后可筛选来源；没有结果时可更换关键词或检查歌词来源设置。' : 'Source filters appear when candidates arrive. If none are found, change the search or check lyrics sources.',
   rematchToast: chinese
     ? '已开始重新匹配，请在抽屉「匹配」页查看结果。'
     : 'Rematch started — check the Match tab in the drawer.',
@@ -65,6 +67,7 @@ const CORNER_HOST = 'data-echo-lmwb-corner';
 const STYLE_HOST = 'data-echo-lmwb-style';
 const SETTING_KEY = 'lyricsCandidatePanelAutoOpenEnabled';
 const REMATCH_EVENT = 'lyrics:rematch-requested';
+const SEARCH_EVENT = 'lyrics:search-requested';
 const OPEN_DRAWER_EVENT = 'app:open-lyrics-settings';
 
 /**
@@ -76,6 +79,55 @@ const PANEL_LAYOUT_CSS = `
 .lyrics-match-panel {
   pointer-events: auto !important;
   z-index: 12 !important;
+}
+/* Keep source chips readable even when MV overrides the lyrics page palette. */
+.lyrics-match-panel :is(.lyrics-source-filters, .echo-lmwb-empty-filter) {
+  display: flex !important;
+  flex: 0 0 auto !important;
+  flex-wrap: wrap !important;
+  align-items: center !important;
+  gap: 6px !important;
+  min-height: 30px !important;
+  overflow: visible !important;
+}
+.lyrics-match-panel :is(.lyrics-source-filters, .echo-lmwb-empty-filter) button {
+  display: inline-flex !important;
+  flex: 0 0 auto !important;
+  align-items: center !important;
+  gap: 5px !important;
+  min-height: 28px !important;
+  padding: 3px 10px !important;
+  color: var(--theme-page-text, #26384f) !important;
+  background: var(--theme-panel-bg, #f8fafc) !important;
+  border: 1px solid var(--theme-panel-border, #cbd5e1) !important;
+  border-radius: 8px !important;
+  font-size: 12px !important;
+  line-height: 1.4 !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+}
+.lyrics-match-panel .lyrics-source-filters button[data-active="true"] {
+  border-color: var(--color-accent, #655ee8) !important;
+  box-shadow: inset 0 0 0 1px var(--color-accent, #655ee8) !important;
+}
+.lyrics-match-panel .lyrics-source-filters button:focus-visible {
+  outline: 2px solid var(--color-accent, #655ee8) !important;
+  outline-offset: 2px !important;
+}
+.lyrics-match-panel :is(.lyrics-source-filters, .echo-lmwb-empty-filter) small {
+  color: inherit !important;
+  font-size: 11px !important;
+}
+.echo-lmwb-empty-filter {
+  padding: 8px;
+  border-radius: 8px;
+  background: var(--theme-panel-bg, #f8fafc);
+}
+.echo-lmwb-empty-filter > span {
+  flex: 1 1 180px;
+  color: var(--theme-page-text, #26384f);
+  font-size: 12px;
+  line-height: 1.5;
 }
 .lyrics-match-panel .lyrics-candidate {
   display: grid !important;
@@ -198,6 +250,14 @@ const PANEL_LAYOUT_CSS = `
 .lyrics-settings-drawer-root[data-open="true"] {
   pointer-events: auto !important;
 }
+/* Keep native candidates clickable while the settings drawer remains open. */
+body:has(.page-surface[data-route-id="lyrics"]:not([hidden]) .lyrics-match-panel) .lyrics-settings-drawer-root[data-open="true"],
+body:has(.page-surface[data-route-id="lyrics"]:not([hidden]) .lyrics-match-panel) .lyrics-settings-drawer-root .audio-drawer-scrim {
+  pointer-events: none !important;
+}
+body:has(.page-surface[data-route-id="lyrics"]:not([hidden]) .lyrics-match-panel) .lyrics-settings-drawer-root .audio-drawer-scrim {
+  background: transparent !important;
+}
 .lyrics-settings-drawer-root .audio-drawer.lyrics-settings-drawer {
   position: absolute !important;
   top: 0 !important;
@@ -239,13 +299,18 @@ let injectTimer = 0;
 let bootTimer = 0;
 let bootAttempts = 0;
 let rematchBusy = false;
+let rematchTimer = 0;
+let closeDrawerTimer = 0;
+let lyricsOpenTimer = 0;
+let lyricsOpenResolve = null;
 let cornerSyncTimer = 0;
+/** One host candidate search per track. A failed streaming lyric lookup used to stop here. */
+const candidateSearchAttempted = new Set();
 
 const cleanups = [];
 const MAX_BOOT_ATTEMPTS = 20;
 const BOOT_RETRY_MS = 500;
-const INJECT_DEBOUNCE_MS = 200;
-const needsDomInject = injectToggle || injectRematch || injectCornerIcon;
+const INJECT_DEBOUNCE_MS = 50;
 
 const getApp = () => {
   const fromExternal = external.echo?.app;
@@ -456,6 +521,9 @@ const findInjectAnchor = () => {
   );
   if (automation) return { parent: automation, after: null };
 
+  const trackSection = document.querySelector('.lyrics-current-track-section .lyrics-section-collapse-content');
+  if (trackSection) return { parent: trackSection, after: null };
+
   const threshold = document.querySelector(
     '.lyrics-settings-master-section__details .lyrics-match-threshold-control, '
     + '.lyrics-display-panel .lyrics-match-threshold-control, '
@@ -555,19 +623,46 @@ const requestRematch = async () => {
     if (forceEnable && !userOptedOut) {
       await ensureEnabled({ quiet: true });
     }
-    window.dispatchEvent(new Event(REMATCH_EVENT));
+    const page = document.querySelector('.lyrics-page');
+    const entry = document.querySelector('.player-cover, .transport-lyrics-button');
+    const extend = external.extend || window.__echoExternalExtend;
+    if ((extend?.navigate || entry) && !page?.getBoundingClientRect?.().width) {
+      if (extend?.navigate) extend.navigate('lyrics');
+      else entry.click();
+      await new Promise((resolve) => {
+        lyricsOpenResolve = resolve;
+        lyricsOpenTimer = window.setTimeout(() => { lyricsOpenTimer = 0; lyricsOpenResolve = null; resolve(); }, 80);
+      });
+    }
+    if (disposed) return;
+    const player = external.player || window.__echoExternalPlayer;
+    const track = player?.queue?.()?.currentTrack;
+    const status = track ? null : await player?.status?.();
+    const trackId = track?.id || status?.currentTrackId;
+    if (trackId) {
+      if (disposed) return;
+      // Cache clearing reloads the host and dismisses candidates; manual search keeps the current lyrics.
+      window.dispatchEvent(new CustomEvent(SEARCH_EVENT, {
+        detail: { query: [track?.title || status?.currentTrackTitle, track?.artist || status?.currentTrackArtist].filter(Boolean).join(' ') || undefined },
+      }));
+    } else {
+      window.dispatchEvent(new Event(REMATCH_EVENT));
+    }
     if (notify) {
       try { external.toast?.(copy.rematchToast); } catch {}
     }
     if (closeDrawerOnRematch) {
-      window.setTimeout(() => {
+      closeDrawerTimer = window.setTimeout(() => {
+        closeDrawerTimer = 0;
         if (!disposed) closeLyricsSettingsDrawer();
       }, 80);
     }
   } catch (error) {
     try { external.log?.warn?.('[lyrics-match-whitebox] rematch failed', error); } catch {}
   } finally {
-    window.setTimeout(() => {
+    if (disposed) return;
+    rematchTimer = window.setTimeout(() => {
+      rematchTimer = 0;
       rematchBusy = false;
       if (!disposed) setRematchBusy(false);
     }, 600);
@@ -747,17 +842,71 @@ const injectPanelLayoutCss = () => {
   return (style.textContent || '').length > 100;
 };
 
+const currentTrack = () => {
+  try {
+    const player = external.player || window.__echoExternalPlayer;
+    return player?.queue?.()?.currentTrack || null;
+  } catch {
+    return null;
+  }
+};
+
+const panelGaveUpOnCandidates = (panel) => {
+  if (panel.querySelector('.lyrics-candidate, .lyrics-candidate-list .lyrics-candidate')) return false;
+  const status = panel.querySelector('.lyrics-match-status')?.textContent || '';
+  return /No lyrics found|流媒体歌词服务不可用|没有找到歌词|歌词服务不可用/u.test(status);
+};
+
+const requestCandidateSearch = () => {
+  const panel = document.querySelector('.lyrics-match-panel');
+  if (!panel || !panelGaveUpOnCandidates(panel)) return;
+  const track = currentTrack();
+  const id = track?.id || 'unknown';
+  if (candidateSearchAttempted.has(id)) return;
+  candidateSearchAttempted.add(id);
+  const query = [track?.title, track?.artist].filter(Boolean).join(' ') || undefined;
+  window.dispatchEvent(new CustomEvent(SEARCH_EVENT, { detail: { query } }));
+};
+
+const syncCandidateFilters = () => {
+  for (const panel of document.querySelectorAll('.lyrics-match-panel')) {
+    const empty = panel.querySelector('.echo-lmwb-empty-filter');
+    if (panel.querySelector('.lyrics-source-filters button')) {
+      empty?.remove();
+      continue;
+    }
+    if (empty) continue;
+    const row = document.createElement('div');
+    row.className = 'echo-lmwb-empty-filter';
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.disabled = true;
+    button.textContent = copy.allSources;
+    const count = document.createElement('small');
+    count.textContent = '0';
+    button.appendChild(count);
+    const hint = document.createElement('span');
+    hint.setAttribute('role', 'status');
+    hint.textContent = copy.emptySources;
+    row.append(button, hint);
+    panel.insertBefore(row, panel.querySelector('.lyrics-match-panel__results') || null);
+  }
+};
+
 const injectAll = () => {
   if (disposed) return;
   injectPanelLayoutCss();
   injectToggleRow();
   injectRematchButton();
   injectCornerButton();
+  syncCandidateFilters();
+  requestCandidateSearch();
 };
 
 const scheduleInject = () => {
-  if (!needsDomInject || disposed) return;
-  if (injectTimer) window.clearTimeout(injectTimer);
+  if (disposed) return;
+  // Coalesce updates without letting continuously changing lyrics starve the injection.
+  if (injectTimer) return;
   injectTimer = window.setTimeout(() => {
     injectTimer = 0;
     if (!disposed) injectAll();
@@ -771,9 +920,12 @@ cleanups.push(() => {
   window.removeEventListener('lyrics:display-settings-changed', onSettingsEvent);
 });
 
-if (needsDomInject) {
-  const observer = new MutationObserver(() => {
+{
+  const observer = new MutationObserver((records) => {
     if (disposed) return;
+    const relevant = '.lyrics-settings-drawer-root, .lyrics-current-track-section, .lyrics-match-threshold-control, #settings-subsection-lyrics-display, .lyrics-match-panel';
+    if (records.length && !records.some((record) => record.target?.closest?.(relevant)
+      || [...(record.addedNodes || []), ...(record.removedNodes || [])].some((node) => node.matches?.(relevant) || node.querySelector?.(relevant)))) return;
     scheduleInject();
     if (cornerSyncTimer) window.clearTimeout(cornerSyncTimer);
     cornerSyncTimer = window.setTimeout(() => {
@@ -787,16 +939,18 @@ if (needsDomInject) {
 
 injectPanelLayoutCss();
 scheduleBoot();
-scheduleInject();
-// Re-assert CSS shortly after boot — loader re-inject / page transitions can drop the tag.
-window.setTimeout(() => { if (!disposed) injectPanelLayoutCss(); }, 800);
-window.setTimeout(() => { if (!disposed) injectPanelLayoutCss(); }, 2500);
+injectAll();
 
 return () => {
   disposed = true;
+  document.querySelectorAll('.echo-lmwb-empty-filter').forEach((node) => node.remove());
   if (bootTimer) window.clearTimeout(bootTimer);
   if (injectTimer) window.clearTimeout(injectTimer);
   if (cornerSyncTimer) window.clearTimeout(cornerSyncTimer);
+  if (rematchTimer) window.clearTimeout(rematchTimer);
+  if (closeDrawerTimer) window.clearTimeout(closeDrawerTimer);
+  if (lyricsOpenTimer) window.clearTimeout(lyricsOpenTimer);
+  lyricsOpenResolve?.();
   for (const cleanup of cleanups.splice(0)) {
     try { cleanup(); } catch {}
   }

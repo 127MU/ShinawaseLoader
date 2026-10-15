@@ -1,6 +1,6 @@
 // Keep this guard in sync with window.__echoExternalLoaderUi.version
-// and ShinawaseLoader.mjs (uiVersion < 64).
-if (window.__echoExternalLoaderUi?.version >= 64) return 'already';
+// and ShinawaseLoader.mjs (uiVersion < 65).
+if (window.__echoExternalLoaderUi?.version >= 65) return 'already';
 window.__echoExternalLoaderUi?.dispose?.();
 
 const base = 'http://127.0.0.1:' + LOADER_PORT;
@@ -18,6 +18,7 @@ const defaultUiSettings = {
   modFilter: 'all',
   steamLaunchReminder: false,
   showTitlebarBrand: true,
+  startupSplash: true,
 };
 let uiSettings = {
   ...defaultUiSettings,
@@ -45,7 +46,6 @@ let drawerAnim = 0;
 let drawerAnimTimer = 0;
 let drawerLayout = 'full';
 let drawerEnterTimer = 0;
-let drawerPullTimer = 0;
 let drawerLayoutFrame = 0;
 let drawerNativeSurfaces = null;
 let drawerSuppressClickAt = -Infinity;
@@ -1752,8 +1752,8 @@ css.textContent = `
   html[data-shl-sidebar="open"] .shl-dock-toggle { color: var(--echo-polish-accent-text, var(--shl-accent-strong)); }
 
   /* The sheet's position is --shl-drawer-p on aside.sidebar while it moves
-     (0 tucked into the dock, 1 open); the Loader eases it on click and the
-     pointer or wheel sets it directly. ECHO's blocks are masked off below the
+     (0 tucked into the dock, 1 open); the Loader eases it on click and a
+     pointer drag sets it directly. The wheel only scrolls the list. ECHO's blocks are masked off below the
      sheet's top edge instead of faded, so the two never overlap on a
      translucent sidebar: the sheet covers them as it rises. */
   .shl-drawer {
@@ -2505,43 +2505,10 @@ const drawerSettlesOpen = (progress, velocity, startedOpen) => {
   if (Math.abs(velocity) >= 0.35) return velocity > 0;
   return startedOpen ? progress > 0.7 : progress > 0.3;
 };
-// Wheel "pull down" at the top of the drawer closes it. Only a gesture that
-// starts while the list already rests at the top counts, so the fling that
-// scrolls back up to the top does not slam the drawer shut.
-const createPullToClose = ({ threshold = 150, settleMs = 260 } = {}) => {
-  let pulled = 0;
-  let lastScrollAt = -Infinity;
-  let lastPullAt = -Infinity;
-  return {
-    scrolled(now) {
-      lastScrollAt = now;
-      pulled = 0;
-    },
-    wheel(deltaY, atTop, now) {
-      if (deltaY >= 0 || !atTop) {
-        pulled = 0;
-        return { progress: 0, close: false };
-      }
-      if (now - lastScrollAt < settleMs) {
-        lastScrollAt = now;
-        return { progress: 0, close: false };
-      }
-      if (now - lastPullAt > settleMs) pulled = 0;
-      lastPullAt = now;
-      pulled += -deltaY;
-      return { progress: Math.min(1, pulled / threshold), close: pulled >= threshold };
-    },
-    reset() {
-      pulled = 0;
-      lastPullAt = -Infinity;
-    },
-  };
-};
-const drawerPull = createPullToClose();
 
 // The sheet's position is one number, --shl-drawer-p on aside.sidebar: 0 is
-// tucked into the dock, 1 is fully open. Clicks ease it, drags and the wheel
-// set it directly; CSS only renders it.
+// tucked into the dock, 1 is fully open. Clicks ease it, drags set it
+// directly; CSS only renders it. The wheel never moves the sheet.
 const drawerOpen = () => drawerTarget === 1;
 const drawerMotionOff = () => motionOff() || document.documentElement.dataset.accessibilityReduceMotion === 'true';
 const setDrawerState = (state) => {
@@ -2784,8 +2751,6 @@ const focusDrawerItem = () => {
 const openDrawer = ({ focus = false, entering = true, velocity = 0 } = {}) => {
   if (!drawer?.isConnected && !ensure()) return;
   if (!drawer?.isConnected) return;
-  window.clearTimeout(drawerPullTimer);
-  drawerPull.reset();
   const wasOpen = drawerTarget === 1;
   drawerTarget = 1;
   if (!wasOpen) drawerNativeSurfaces = visibleNativeSurfaces();
@@ -2802,10 +2767,8 @@ const openDrawer = ({ focus = false, entering = true, velocity = 0 } = {}) => {
 const closeDrawer = ({ focusDock = false, velocity = 0 } = {}) => {
   if (drawerTarget === 0) return;
   const hadFocus = Boolean(drawer?.contains(document.activeElement));
-  window.clearTimeout(drawerPullTimer);
   window.clearTimeout(drawerEnterTimer);
   if (drawer) delete drawer.dataset.entering;
-  drawerPull.reset();
   drawerTarget = 0;
   drawerNativeSurfaces = null;
   writeStorage('sessionStorage', DRAWER_STATE_KEY, '');
@@ -2890,8 +2853,6 @@ const onDrawerPointerMove = (event) => {
     }
     drag.active = true;
     stopDrawerAnimation();
-    window.clearTimeout(drawerPullTimer);
-    drawerPull.reset();
     layoutDrawer();
     drag.height = Math.max(1, drawer?.offsetHeight || 1);
     // Grab the sheet where it is, even mid-animation.
@@ -2928,34 +2889,11 @@ const onDrawerPointerUp = (event) => {
   else closeDrawer({ velocity });
 };
 
+const onDrawerScroll = () => syncDrawerFade();
+// The wheel scrolls the page list and nothing else: outside the list it must
+// not reach ECHO's sidebar underneath the sheet.
 const onDrawerWheel = (event) => {
-  if (!drawerOpen() || drawerDrag || event.ctrlKey || drawerLayout === 'horizontal') return;
-  const raw = Number(event.deltaY) || 0;
-  const delta = event.deltaMode === 1 ? raw * 16 : event.deltaMode === 2 ? raw * (drawerBody?.clientHeight || 400) : raw;
-  const atTop = Boolean(event.target?.closest?.('[data-shl-drawer-head]')) || !drawerBody || drawerBody.scrollTop <= 0;
-  const result = drawerPull.wheel(delta, atTop, performance.now());
-  if (!result.progress) {
-    if (drawerProgress < 1) animateDrawer(1);
-    return;
-  }
-  event.preventDefault();
-  if (result.close) {
-    closeDrawer();
-    return;
-  }
-  // Rubber band: the sheet gives a little with each pull, then springs back.
-  animateDrawer(1 - result.progress * 0.3, { duration: 150 });
-  window.clearTimeout(drawerPullTimer);
-  drawerPullTimer = window.setTimeout(() => {
-    if (drawerOpen() && !drawerDrag) {
-      drawerPull.reset();
-      animateDrawer(1);
-    }
-  }, 340);
-};
-const onDrawerScroll = () => {
-  drawerPull.scrolled(performance.now());
-  syncDrawerFade();
+  if (!drawerBody?.contains(event.target) && !event.ctrlKey) event.preventDefault();
 };
 
 const drawerFocusable = (node) => node.getClientRects().length > 0;
@@ -3041,8 +2979,8 @@ const buildDrawer = () => {
   const head = node.querySelector('[data-shl-drawer-head]');
   head.addEventListener('pointerdown', onDrawerPointerDown);
   head.addEventListener('click', onDrawerHeadClick);
-  node.addEventListener('keydown', onDrawerKeydown);
   node.addEventListener('wheel', onDrawerWheel, { passive: false });
+  node.addEventListener('keydown', onDrawerKeydown);
   drawerBody.addEventListener('scroll', onDrawerScroll, { passive: true });
   const filter = node.querySelector('[data-shl-drawer-filter]');
   filter.addEventListener('input', () => {
@@ -3404,6 +3342,7 @@ const buildAppearance = (grid) => {
     row(T.cardLayout, segControl('cardLayout', [['list', T.layoutList, iconRows], ['grid', T.layoutGrid, iconGrid]])),
     row(T.accentColor, accentControl()),
     row(T.animations, switchControl('animations')),
+    row(T.startupSplash || 'Startup animation', switchControl('startupSplash', T.startupSplash)),
     row(T.showDescriptions, switchControl('showModDescriptions')),
     row(T.showVersions, switchControl('showModVersions')),
     row(T.showIds, switchControl('showModIds')),
@@ -5841,7 +5780,7 @@ const onNavControlClick = (event) => {
 window.addEventListener('click', onNavControlClick, true);
 
 window.__echoExternalLoaderUi = {
-  version: 64,
+  version: 65,
   registerSidebar,
   unregisterSidebar: removeSidebar,
   uiSettings: () => ({ ...uiSettings }),
@@ -5880,7 +5819,6 @@ window.__echoExternalLoaderUi = {
     window.cancelAnimationFrame(drawerLayoutFrame);
     stopDrawerAnimation();
     window.clearTimeout(drawerEnterTimer);
-    window.clearTimeout(drawerPullTimer);
     clearDrawerProgress();
     drawer?.parentElement?.style.removeProperty('--shl-drawer-y');
     drawer?.parentElement?.style.removeProperty('--shl-drawer-h');

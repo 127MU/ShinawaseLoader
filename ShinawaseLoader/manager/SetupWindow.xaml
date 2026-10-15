@@ -1,0 +1,64 @@
+<Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Shinawase Manager Setup" Width="520" Height="420"
+        WindowStartupLocation="CenterScreen" ResizeMode="CanMinimize"
+        Background="{DynamicResource B.Bg}" Foreground="{DynamicResource B.Text}"
+        FontFamily="Segoe UI Variable Text, Segoe UI, Microsoft YaHei UI" FontSize="13.5"
+        UseLayoutRounding="True" SnapsToDevicePixels="True">
+  <WindowChrome.WindowChrome>
+    <WindowChrome CaptionHeight="40" ResizeBorderThickness="0" GlassFrameThickness="0,0,0,1" CornerRadius="0" UseAeroCaptionButtons="False"/>
+  </WindowChrome.WindowChrome>
+  <Grid x:Name="SetupRoot" Background="{DynamicResource B.Bg}">
+    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Top">
+      <Button x:Name="BtnMin" Style="{StaticResource CaptionBtn}" Content="&#xE921;"/>
+      <Button x:Name="BtnClose" Style="{StaticResource CaptionClose}" Content="&#xE8BB;"/>
+    </StackPanel>
+    <Grid Margin="32,54,32,24">
+      <Grid.RowDefinitions>
+        <RowDefinition Height="Auto"/>
+        <RowDefinition Height="*"/>
+        <RowDefinition Height="Auto"/>
+      </Grid.RowDefinitions>
+      <StackPanel>
+        <TextBlock x:Name="SetupTitle" Style="{StaticResource H1}" Text=" "/>
+        <TextBlock x:Name="SetupSub" FontSize="12" Foreground="{DynamicResource B.Text3}" Margin="0,5,0,0" Text=" "/>
+        <TextBlock x:Name="SetupDesc" Style="{StaticResource Sub}" Margin="0,12,0,0" Text=" "/>
+      </StackPanel>
+      <!-- Both states occupy the same space, so progress never shifts the footer. -->
+      <Grid Grid.Row="1" Margin="0,22,0,18" VerticalAlignment="Center" MinHeight="88">
+        <StackPanel x:Name="OptionsPanel">
+          <Grid>
+            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+            <TextBlock x:Name="SetupPath" VerticalAlignment="Center" FontSize="12" Foreground="{DynamicResource B.Text2}" TextTrimming="CharacterEllipsis" Margin="0,0,12,0"/>
+            <Button x:Name="BtnChange" Grid.Column="1" Style="{StaticResource Link}" Content="{DynamicResource s.setup.change}"/>
+          </Grid>
+          <CheckBox x:Name="OptLaunch" Content="{DynamicResource s.setup.optLaunch}" Foreground="{DynamicResource B.Text2}" Margin="0,16,0,0"/>
+        </StackPanel>
+        <StackPanel x:Name="ProgressPanel" Visibility="Collapsed" VerticalAlignment="Center">
+          <TextBlock x:Name="SetupPercent" FontSize="22" FontWeight="SemiBold" Text="0%"/>
+          <Grid Height="4" Margin="0,12,0,0" ClipToBounds="True">
+            <Border CornerRadius="2" Background="{DynamicResource B.Track}"/>
+            <Border CornerRadius="2" Background="{DynamicResource B.Accent}" RenderTransformOrigin="0,0.5">
+              <Border.RenderTransform><ScaleTransform x:Name="SetupProgressScale" ScaleX="0"/></Border.RenderTransform>
+            </Border>
+          </Grid>
+        </StackPanel>
+      </Grid>
+      <StackPanel Grid.Row="2">
+        <TextBlock x:Name="SetupStatus" FontSize="12" Foreground="{DynamicResource B.Text2}" TextWrapping="Wrap" Margin="0,0,0,12"/>
+        <Button x:Name="BtnPrimary" Style="{StaticResource PrimaryLarge}" Height="46">
+          <Grid>
+            <TextBlock x:Name="BtnPrimaryText" HorizontalAlignment="Center"/>
+            <ContentControl x:Name="BtnPrimarySpin" Style="{StaticResource Spinner}" Foreground="#FFFFFF" Visibility="Collapsed"/>
+          </Grid>
+        </Button>
+        <Grid Margin="0,10,0,0">
+          <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+          <TextBlock Text="{DynamicResource s.setup.noAdmin}" FontSize="11" Foreground="{DynamicResource B.Text3}" VerticalAlignment="Center"/>
+          <Button x:Name="BtnUninstall" Grid.Column="1" Style="{StaticResource Link}" Content="{DynamicResource s.setup.unBtn}" Visibility="Collapsed"/>
+          <Button x:Name="BtnSecondary" Grid.Column="2" Style="{StaticResource Link}"/>
+        </Grid>
+      </StackPanel>
+    </Grid>
+  </Grid>
+</Window>

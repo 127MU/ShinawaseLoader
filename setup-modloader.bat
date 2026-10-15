@@ -2,6 +2,17 @@
 setlocal
 title ShinawaseLoader - Setup
 cd /d "%~dp0"
+rem No arguments: open the Shinawase Manager GUI. Any argument (for example
+rem -Action install -EchoRoot "...") keeps the PowerShell CLI installer.
+if not "%~1"=="" goto cli
+if exist "%~dp0ShinawaseManager.exe" (
+  start "" "%~dp0ShinawaseManager.exe" --source "%~dp0ShinawaseLoader"
+  exit /b 0
+)
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\build-manager.ps1" -Launch >nul
+if not errorlevel 1 exit /b 0
+echo Shinawase Manager could not be started; falling back to the console installer.
+:cli
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\setup-modloader.ps1" %*
 if errorlevel 1 (
   pause

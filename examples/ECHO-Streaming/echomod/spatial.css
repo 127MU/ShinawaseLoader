@@ -1,5 +1,71 @@
 /* Spatial streaming shell for the community Mod. Hosts that already ship
    these rules keep working; this file fills the gap for Steam builds. */
+.echo-streaming-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 6px 12px;
+  border: 1px solid var(--theme-panel-border, rgba(128, 128, 128, .2));
+  border-radius: 9px;
+  background: var(--theme-panel-bg, #fff);
+  color: var(--theme-text, inherit);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 140ms ease, border-color 140ms ease, opacity 140ms ease;
+}
+.echo-streaming-button:hover:not(:disabled) {
+  background: var(--theme-hover-bg, rgba(128, 128, 128, .12));
+  border-color: var(--theme-accent, #6366f1);
+}
+.echo-streaming-button:focus-visible {
+  outline: 2px solid var(--theme-accent, #6366f1);
+  outline-offset: 2px;
+}
+.echo-streaming-button:disabled { opacity: .45; cursor: default; }
+.echo-streaming-button.streaming-track-artist,
+.echo-streaming-button.streaming-track-album {
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  font-weight: inherit;
+}
+.echo-streaming-button.streaming-track-artist:hover:not(:disabled),
+.echo-streaming-button.streaming-track-artist:focus-visible,
+.echo-streaming-button.streaming-track-album:hover:not(:disabled),
+.echo-streaming-button.streaming-track-album:focus-visible {
+  background: transparent;
+  border-color: transparent;
+  outline: none;
+}
+.echo-streaming-button > svg { flex: none; }
+.echo-streaming-icon-button { width: 34px; height: 34px; padding: 0; flex: none; }
+.echo-streaming-button.settings-account-login-button {
+  background: var(--theme-accent, #6366f1);
+  border-color: transparent;
+  color: #fff;
+}
+.echo-streaming-button.settings-account-login-button:hover:not(:disabled) { background: color-mix(in srgb, var(--theme-accent, #6366f1) 85%, #000); }
+.echo-streaming-button.settings-danger-button { color: var(--theme-danger, #c2414a); }
+.streaming-playlist-filter { display: flex; align-items: center; gap: 8px; margin: 8px 0; }
+.streaming-playlist-filter input {
+  width: 100%; min-width: 0; height: 32px; padding: 0;
+  border: 0; background: transparent; color: inherit; font: inherit;
+}
+.streaming-playlist-filter:focus-within { outline: 2px solid var(--theme-accent, #6366f1); outline-offset: 2px; }
+.streaming-playlist-search-heading { margin: 12px 8px 4px; font-size: 12px; }
+.streaming-playlist-search-results { max-height: min(32vh, 320px); overflow: auto; }
+[data-account-playlist-filter-list] > [hidden], [data-account-playlist-filter-empty][hidden] { display: none !important; }
+[data-echo-streaming-paused] > :not(.echo-streaming-paused-icon) { display: none !important; }
+.echo-streaming-paused-icon { display: inline-flex; align-items: center; justify-content: center; }
+@media (prefers-reduced-motion: reduce) { .echo-streaming-button { transition: none; } }
+
 .echo-external-mod-page:has(.streaming-hub--spatial),
 .echo-external-mod-page:has(.streaming-account-page) {
   display: grid;
@@ -2340,4 +2406,250 @@
   background: var(--theme-field-bg, rgba(0, 0, 0, 0.03));
   color: inherit;
   font: inherit;
+}
+
+/* Album detail opens inside the mod page. The generic chip style must not
+   replace its controls, and the host album stylesheet is not on this route. */
+.echo-external-mod-page > .album-detail-page {
+  --album-detail-page-x: 28px;
+  --album-detail-track-content-x: 0px;
+  position: relative;
+  display: grid;
+  width: 100%;
+  min-width: 0;
+  min-height: 100%;
+  align-content: start;
+  gap: 16px;
+  box-sizing: border-box;
+  padding: 20px var(--album-detail-page-x) 28px;
+  color: var(--theme-page-text, inherit);
+  background: transparent;
+}
+
+.echo-external-mod-page > .album-detail-page .album-back-button {
+  position: absolute;
+  top: 16px;
+  left: var(--album-detail-page-x);
+  z-index: 2;
+  display: inline-flex;
+  width: fit-content;
+  min-height: 24px;
+  align-items: center;
+  gap: 8px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  color: var(--theme-muted-text, inherit);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 760;
+}
+
+.echo-external-mod-page > .album-detail-page .album-back-button:hover:not(:disabled) {
+  background: transparent;
+  border-color: transparent;
+  color: var(--theme-heading-text, inherit);
+}
+
+.echo-external-mod-page > .album-detail-page .album-detail-hero {
+  display: grid;
+  grid-template-columns: minmax(140px, 220px) minmax(0, 1fr);
+  align-items: center;
+  gap: clamp(16px, 3vw, 36px);
+  width: 100%;
+  min-width: 0;
+  padding: 28px 0 4px;
+}
+
+.echo-external-mod-page > .album-detail-page .album-detail-cover {
+  width: 100%;
+  min-width: 0;
+  aspect-ratio: 1;
+  overflow: hidden;
+  border-radius: 8px;
+}
+
+.echo-external-mod-page > .album-detail-page .album-detail-cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.echo-external-mod-page > .album-detail-page .album-detail-console,
+.echo-external-mod-page > .album-detail-page .album-detail-copy,
+.echo-external-mod-page > .album-detail-page .album-detail-meta {
+  display: grid;
+  min-width: 0;
+  gap: 8px;
+}
+
+.echo-external-mod-page > .album-detail-page .album-detail-meta {
+  display: flex;
+  flex-wrap: wrap;
+  color: var(--theme-muted-text, inherit);
+  font-size: 13px;
+}
+
+.echo-external-mod-page > .album-detail-page .album-detail-copy h1 {
+  margin: 0;
+  color: var(--theme-heading-text, inherit);
+  font-size: clamp(26px, 3vw, 44px);
+  font-weight: 640;
+  line-height: 1.08;
+  overflow-wrap: anywhere;
+}
+
+.echo-external-mod-page > .album-detail-page .album-detail-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.echo-external-mod-page > .album-detail-page .album-primary-action,
+.echo-external-mod-page > .album-detail-page .album-secondary-action {
+  display: inline-flex;
+  width: auto;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 36px;
+  border-radius: 999px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.echo-external-mod-page > .album-detail-page .album-primary-action {
+  padding: 0 16px;
+  border: 0;
+  background: var(--theme-accent, #4b55e8);
+  color: #fff;
+}
+
+.echo-external-mod-page > .album-detail-page .album-primary-action:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--theme-accent, #4b55e8) 86%, #000);
+  border-color: transparent;
+}
+
+.echo-external-mod-page > .album-detail-page .album-secondary-action {
+  padding: 0 14px;
+  border: 1px solid var(--theme-panel-border, rgba(0, 0, 0, 0.14));
+  background: transparent;
+  color: inherit;
+}
+
+.echo-external-mod-page > .album-detail-page .album-secondary-action:hover:not(:disabled) {
+  background: var(--theme-list-row-bg-hover, rgba(0, 0, 0, 0.04));
+}
+
+.echo-external-mod-page > .album-detail-page .album-detail-facts {
+  display: none;
+}
+
+.echo-external-mod-page > .album-detail-page .album-detail-tabs {
+  display: flex;
+  min-height: 36px;
+  border-bottom: 1px solid var(--theme-panel-border, rgba(0, 0, 0, 0.08));
+}
+
+.echo-external-mod-page > .album-detail-page .album-detail-tab {
+  min-height: 0;
+  padding: 0 0 10px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  color: var(--theme-heading-text, inherit);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 650;
+}
+
+.echo-external-mod-page > .album-detail-page .album-detail-tab:hover:not(:disabled) {
+  background: transparent;
+  border-color: transparent;
+}
+
+.echo-external-mod-page > .album-detail-page .album-track-list,
+.echo-external-mod-page > .album-detail-page .album-detail-track-console,
+.echo-external-mod-page > .album-detail-page .album-track-section {
+  display: grid;
+  min-width: 0;
+  gap: 0;
+}
+
+.echo-external-mod-page > .album-detail-page .album-track-header,
+.echo-external-mod-page > .album-detail-page .echo-streaming-button.album-track-row {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr) 56px;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.echo-external-mod-page > .album-detail-page .album-track-header {
+  min-height: 28px;
+  color: var(--theme-muted-text, inherit);
+  font-size: 11px;
+  font-weight: 750;
+}
+
+.echo-external-mod-page > .album-detail-page .album-track-header span:nth-child(3),
+.echo-external-mod-page > .album-detail-page .album-track-tags,
+.echo-external-mod-page > .album-detail-page .album-track-actions {
+  display: none;
+}
+
+.echo-external-mod-page > .album-detail-page .echo-streaming-button.album-track-row {
+  min-height: 52px;
+  justify-content: stretch;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  color: var(--theme-page-text, inherit);
+  font: inherit;
+  font-size: inherit;
+  font-weight: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.echo-external-mod-page > .album-detail-page .echo-streaming-button.album-track-row:hover:not(:disabled) {
+  background: var(--theme-list-row-bg-hover, rgba(0, 0, 0, 0.04));
+  border-color: transparent;
+}
+
+.echo-external-mod-page > .album-detail-page .album-track-copy {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.echo-external-mod-page > .album-detail-page .album-track-copy strong,
+.echo-external-mod-page > .album-detail-page .album-track-copy small,
+.echo-external-mod-page > .album-detail-page .album-track-duration {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.echo-external-mod-page > .album-detail-page .album-track-copy small,
+.echo-external-mod-page > .album-detail-page .album-track-duration,
+.echo-external-mod-page > .album-detail-page .album-track-number {
+  color: var(--theme-muted-text, inherit);
+  font-size: 12px;
+}
+
+.echo-external-mod-page > .album-detail-page .album-load-more {
+  justify-self: start;
+  width: auto;
+  margin-top: 10px;
 }

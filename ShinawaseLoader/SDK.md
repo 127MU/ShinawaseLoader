@@ -68,6 +68,7 @@ The Loader page has an Appearance section. Every option persists in `loader.conf
 | `accentColor` | `''` (default) or `#rrggbb` | Overrides `--theme-accent` on loader-owned surfaces only; empty follows the ECHO theme. |
 | `animations` | `true` (default), `false` | Loader UI animations and transitions. |
 | `showTitlebarBrand` | `true` (default), `false` | Show or hide the injected Shiawase label in ECHO's title bar. |
+| `startupSplash` | `true` (default), `false` | Shinawase startup animation shown while ECHO boots. Read by the modded runtime at the next launch, so it is the one key that does not apply immediately. |
 | `cardLayout` | `list` (default), `grid` | Mods page card arrangement. |
 | `showModDescriptions` | `true` (default), `false` | Description line on mod cards. |
 | `showModVersions` | `true` (default), `false` | Version badge on mod cards. |

@@ -62,8 +62,8 @@ export const PLAYER_GLOBAL = '__echoExternalPlayer';
 export const EXTEND_GLOBAL = '__echoExternalExtend';
 
 // Minimum runtime versions the injection cycle expects (ShinawaseLoader.mjs
-// injectEnabled(): uiVersion < 59, playerVersion < 1, extendVersion < 1).
-export const MIN_UI_VERSION = 59;
+// injectEnabled(): uiVersion < 65, playerVersion < 1, extendVersion < 1).
+export const MIN_UI_VERSION = 65;
 export const MIN_PLAYER_VERSION = 1;
 export const MIN_EXTEND_VERSION = 1;
 
@@ -175,6 +175,7 @@ export const DEFAULT_UI_SETTINGS = Object.freeze({
   modFilter: 'all',
   steamLaunchReminder: false,
   showTitlebarBrand: true,
+  startupSplash: true,
 });
 
 // SDK.md "echo-steam 26.9.1 alignment": window.echo namespaces observed on the

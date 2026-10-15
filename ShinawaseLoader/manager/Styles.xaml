@@ -1,0 +1,644 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <!-- Shared by MainWindow.xaml and SetupWindow.xaml; merged into the
+       application resources before either window is parsed. -->
+  <FontFamily x:Key="IconFont">Segoe Fluent Icons, Segoe MDL2 Assets</FontFamily>
+  <FontFamily x:Key="MonoFont">Cascadia Mono, Consolas, Microsoft YaHei UI</FontFamily>
+  <CubicEase x:Key="EaseOut" EasingMode="EaseOut"/>
+
+  <!-- text -->
+  <Style x:Key="H1" TargetType="TextBlock">
+    <Setter Property="FontSize" Value="26"/>
+    <Setter Property="FontWeight" Value="SemiBold"/>
+    <Setter Property="FontFamily" Value="Segoe UI Variable Display, Segoe UI, Microsoft YaHei UI"/>
+    <Setter Property="Foreground" Value="{DynamicResource B.Text}"/>
+  </Style>
+  <Style x:Key="Sub" TargetType="TextBlock">
+    <Setter Property="FontSize" Value="13.5"/>
+    <Setter Property="Foreground" Value="{DynamicResource B.Text2}"/>
+    <Setter Property="TextWrapping" Value="Wrap"/>
+  </Style>
+  <Style x:Key="H3" TargetType="TextBlock">
+    <Setter Property="FontSize" Value="14.5"/>
+    <Setter Property="FontWeight" Value="SemiBold"/>
+    <Setter Property="Foreground" Value="{DynamicResource B.Text}"/>
+  </Style>
+  <Style x:Key="Section" TargetType="TextBlock">
+    <Setter Property="FontSize" Value="12.5"/>
+    <Setter Property="FontWeight" Value="SemiBold"/>
+    <Setter Property="Foreground" Value="{DynamicResource B.Text3}"/>
+    <Setter Property="Margin" Value="4,26,0,10"/>
+  </Style>
+  <Style x:Key="Desc" TargetType="TextBlock">
+    <Setter Property="FontSize" Value="12.5"/>
+    <Setter Property="Foreground" Value="{DynamicResource B.Text2}"/>
+    <Setter Property="TextWrapping" Value="Wrap"/>
+    <Setter Property="Margin" Value="0,3,0,0"/>
+  </Style>
+  <Style x:Key="Glyph" TargetType="TextBlock">
+    <Setter Property="FontFamily" Value="{StaticResource IconFont}"/>
+    <Setter Property="FontSize" Value="16"/>
+    <Setter Property="VerticalAlignment" Value="Center"/>
+    <Setter Property="HorizontalAlignment" Value="Center"/>
+  </Style>
+  <Style x:Key="Card" TargetType="Border">
+    <Setter Property="Background" Value="{DynamicResource B.Surface}"/>
+    <Setter Property="BorderBrush" Value="{DynamicResource B.Border}"/>
+    <Setter Property="BorderThickness" Value="1"/>
+    <Setter Property="CornerRadius" Value="14"/>
+    <Setter Property="Padding" Value="20,18"/>
+  </Style>
+  <Style x:Key="Divider" TargetType="Border">
+    <Setter Property="Height" Value="1"/>
+    <Setter Property="Background" Value="{DynamicResource B.Divider}"/>
+    <Setter Property="Margin" Value="0,14"/>
+  </Style>
+
+  <!-- buttons -->
+  <ControlTemplate x:Key="BtnTemplate" TargetType="Button">
+    <Grid x:Name="root" RenderTransformOrigin="0.5,0.5" Background="Transparent">
+      <Grid.RenderTransform><ScaleTransform x:Name="sc"/></Grid.RenderTransform>
+      <Border x:Name="bg" CornerRadius="10" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}"/>
+      <Border x:Name="hover" CornerRadius="10" Background="{DynamicResource B.HoverOverlay}" Opacity="0"/>
+      <ContentPresenter Margin="{TemplateBinding Padding}" HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}" VerticalAlignment="Center" RecognizesAccessKey="False"/>
+    </Grid>
+    <ControlTemplate.Triggers>
+      <Trigger Property="IsMouseOver" Value="True">
+        <Trigger.EnterActions><BeginStoryboard><Storyboard><DoubleAnimation Storyboard.TargetName="hover" Storyboard.TargetProperty="Opacity" To="1" Duration="0:0:0.14"/></Storyboard></BeginStoryboard></Trigger.EnterActions>
+        <Trigger.ExitActions><BeginStoryboard><Storyboard><DoubleAnimation Storyboard.TargetName="hover" Storyboard.TargetProperty="Opacity" To="0" Duration="0:0:0.22"/></Storyboard></BeginStoryboard></Trigger.ExitActions>
+      </Trigger>
+      <Trigger Property="IsPressed" Value="True">
+        <Trigger.EnterActions><BeginStoryboard><Storyboard>
+          <DoubleAnimation Storyboard.TargetName="sc" Storyboard.TargetProperty="ScaleX" To="0.965" Duration="0:0:0.08"/>
+          <DoubleAnimation Storyboard.TargetName="sc" Storyboard.TargetProperty="ScaleY" To="0.965" Duration="0:0:0.08"/>
+        </Storyboard></BeginStoryboard></Trigger.EnterActions>
+        <Trigger.ExitActions><BeginStoryboard><Storyboard>
+          <DoubleAnimation Storyboard.TargetName="sc" Storyboard.TargetProperty="ScaleX" To="1" Duration="0:0:0.28"><DoubleAnimation.EasingFunction><BackEase EasingMode="EaseOut" Amplitude="0.6"/></DoubleAnimation.EasingFunction></DoubleAnimation>
+          <DoubleAnimation Storyboard.TargetName="sc" Storyboard.TargetProperty="ScaleY" To="1" Duration="0:0:0.28"><DoubleAnimation.EasingFunction><BackEase EasingMode="EaseOut" Amplitude="0.6"/></DoubleAnimation.EasingFunction></DoubleAnimation>
+        </Storyboard></BeginStoryboard></Trigger.ExitActions>
+      </Trigger>
+      <Trigger Property="IsEnabled" Value="False">
+        <Setter TargetName="root" Property="Opacity" Value="0.42"/>
+      </Trigger>
+    </ControlTemplate.Triggers>
+  </ControlTemplate>
+  <ControlTemplate x:Key="BtnSolidTemplate" TargetType="Button">
+    <Grid x:Name="root" RenderTransformOrigin="0.5,0.5" Background="Transparent">
+      <Grid.RenderTransform><ScaleTransform x:Name="sc"/></Grid.RenderTransform>
+      <Border x:Name="bg" CornerRadius="10" Background="{TemplateBinding Background}"/>
+      <Border x:Name="hover" CornerRadius="10" Background="#26FFFFFF" Opacity="0"/>
+      <ContentPresenter Margin="{TemplateBinding Padding}" HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}" VerticalAlignment="Center" RecognizesAccessKey="False"/>
+    </Grid>
+    <ControlTemplate.Triggers>
+      <Trigger Property="IsMouseOver" Value="True">
+        <Trigger.EnterActions><BeginStoryboard><Storyboard><DoubleAnimation Storyboard.TargetName="hover" Storyboard.TargetProperty="Opacity" To="1" Duration="0:0:0.14"/></Storyboard></BeginStoryboard></Trigger.EnterActions>
+        <Trigger.ExitActions><BeginStoryboard><Storyboard><DoubleAnimation Storyboard.TargetName="hover" Storyboard.TargetProperty="Opacity" To="0" Duration="0:0:0.22"/></Storyboard></BeginStoryboard></Trigger.ExitActions>
+      </Trigger>
+      <Trigger Property="IsPressed" Value="True">
+        <Trigger.EnterActions><BeginStoryboard><Storyboard>
+          <DoubleAnimation Storyboard.TargetName="sc" Storyboard.TargetProperty="ScaleX" To="0.965" Duration="0:0:0.08"/>
+          <DoubleAnimation Storyboard.TargetName="sc" Storyboard.TargetProperty="ScaleY" To="0.965" Duration="0:0:0.08"/>
+        </Storyboard></BeginStoryboard></Trigger.EnterActions>
+        <Trigger.ExitActions><BeginStoryboard><Storyboard>
+          <DoubleAnimation Storyboard.TargetName="sc" Storyboard.TargetProperty="ScaleX" To="1" Duration="0:0:0.3"><DoubleAnimation.EasingFunction><BackEase EasingMode="EaseOut" Amplitude="0.6"/></DoubleAnimation.EasingFunction></DoubleAnimation>
+          <DoubleAnimation Storyboard.TargetName="sc" Storyboard.TargetProperty="ScaleY" To="1" Duration="0:0:0.3"><DoubleAnimation.EasingFunction><BackEase EasingMode="EaseOut" Amplitude="0.6"/></DoubleAnimation.EasingFunction></DoubleAnimation>
+        </Storyboard></BeginStoryboard></Trigger.ExitActions>
+      </Trigger>
+      <Trigger Property="IsEnabled" Value="False">
+        <Setter TargetName="root" Property="Opacity" Value="0.45"/>
+      </Trigger>
+    </ControlTemplate.Triggers>
+  </ControlTemplate>
+
+  <Style x:Key="BtnBase" TargetType="Button">
+    <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+    <Setter Property="Cursor" Value="Hand"/>
+    <Setter Property="Height" Value="36"/>
+    <Setter Property="Padding" Value="16,0"/>
+    <Setter Property="FontSize" Value="13.5"/>
+    <Setter Property="HorizontalContentAlignment" Value="Center"/>
+    <Setter Property="BorderThickness" Value="0"/>
+    <Setter Property="Template" Value="{StaticResource BtnTemplate}"/>
+  </Style>
+  <Style x:Key="Primary" TargetType="Button" BasedOn="{StaticResource BtnBase}">
+    <Setter Property="Background" Value="{DynamicResource B.Accent}"/>
+    <Setter Property="Foreground" Value="{DynamicResource B.AccentText}"/>
+    <Setter Property="FontWeight" Value="SemiBold"/>
+    <Setter Property="Template" Value="{StaticResource BtnSolidTemplate}"/>
+  </Style>
+  <Style x:Key="PrimaryLarge" TargetType="Button" BasedOn="{StaticResource Primary}">
+    <Setter Property="Height" Value="46"/>
+    <Setter Property="Padding" Value="22,0"/>
+    <Setter Property="FontSize" Value="14.5"/>
+  </Style>
+  <Style x:Key="Secondary" TargetType="Button" BasedOn="{StaticResource BtnBase}">
+    <Setter Property="Background" Value="{DynamicResource B.Surface2}"/>
+    <Setter Property="BorderBrush" Value="{DynamicResource B.Border}"/>
+    <Setter Property="BorderThickness" Value="1"/>
+    <Setter Property="Foreground" Value="{DynamicResource B.Text}"/>
+  </Style>
+  <Style x:Key="Ghost" TargetType="Button" BasedOn="{StaticResource BtnBase}">
+    <Setter Property="Background" Value="Transparent"/>
+    <Setter Property="Foreground" Value="{DynamicResource B.Text2}"/>
+    <Setter Property="Padding" Value="12,0"/>
+  </Style>
+  <Style x:Key="Danger" TargetType="Button" BasedOn="{StaticResource BtnBase}">
+    <Setter Property="Background" Value="{DynamicResource B.DangerSoft}"/>
+    <Setter Property="Foreground" Value="{DynamicResource B.Danger}"/>
+    <Setter Property="FontWeight" Value="SemiBold"/>
+  </Style>
+  <Style x:Key="DangerSolid" TargetType="Button" BasedOn="{StaticResource Primary}">
+    <Setter Property="Background" Value="{DynamicResource B.Danger}"/>
+    <Setter Property="Foreground" Value="#FFFFFF"/>
+  </Style>
+  <Style x:Key="Link" TargetType="Button" BasedOn="{StaticResource BtnBase}">
+    <Setter Property="Background" Value="Transparent"/>
+    <Setter Property="Foreground" Value="{DynamicResource B.Accent}"/>
+    <Setter Property="Height" Value="26"/>
+    <Setter Property="Padding" Value="8,0"/>
+    <Setter Property="FontWeight" Value="SemiBold"/>
+  </Style>
+  <Style x:Key="IconBtn" TargetType="Button" BasedOn="{StaticResource BtnBase}">
+    <Setter Property="Width" Value="34"/>
+    <Setter Property="Height" Value="34"/>
+    <Setter Property="Padding" Value="0"/>
+    <Setter Property="Background" Value="Transparent"/>
+    <Setter Property="Foreground" Value="{DynamicResource B.Text2}"/>
+    <Setter Property="FontFamily" Value="{StaticResource IconFont}"/>
+    <Setter Property="FontSize" Value="14"/>
+  </Style>
+  <Style x:Key="CaptionBtn" TargetType="Button">
+    <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+    <Setter Property="Width" Value="46"/>
+    <Setter Property="Height" Value="34"/>
+    <Setter Property="Foreground" Value="{DynamicResource B.Text2}"/>
+    <Setter Property="FontFamily" Value="{StaticResource IconFont}"/>
+    <Setter Property="FontSize" Value="10"/>
+    <Setter Property="WindowChrome.IsHitTestVisibleInChrome" Value="True"/>
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="Button">
+          <Grid Background="Transparent">
+            <Border x:Name="hover" Background="{DynamicResource B.HoverOverlay}" Opacity="0"/>
+            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+          </Grid>
+          <ControlTemplate.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+              <Trigger.EnterActions><BeginStoryboard><Storyboard><DoubleAnimation Storyboard.TargetName="hover" Storyboard.TargetProperty="Opacity" To="1" Duration="0:0:0.1"/></Storyboard></BeginStoryboard></Trigger.EnterActions>
+              <Trigger.ExitActions><BeginStoryboard><Storyboard><DoubleAnimation Storyboard.TargetName="hover" Storyboard.TargetProperty="Opacity" To="0" Duration="0:0:0.18"/></Storyboard></BeginStoryboard></Trigger.ExitActions>
+            </Trigger>
+          </ControlTemplate.Triggers>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+  <Style x:Key="CaptionClose" TargetType="Button" BasedOn="{StaticResource CaptionBtn}">
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="Button">
+          <Grid Background="Transparent">
+            <Border x:Name="hover" Background="#E81123" Opacity="0"/>
+            <ContentPresenter x:Name="cp" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+          </Grid>
+          <ControlTemplate.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+              <Setter Property="Foreground" Value="#FFFFFF"/>
+              <Trigger.EnterActions><BeginStoryboard><Storyboard><DoubleAnimation Storyboard.TargetName="hover" Storyboard.TargetProperty="Opacity" To="1" Duration="0:0:0.1"/></Storyboard></BeginStoryboard></Trigger.EnterActions>
+              <Trigger.ExitActions><BeginStoryboard><Storyboard><DoubleAnimation Storyboard.TargetName="hover" Storyboard.TargetProperty="Opacity" To="0" Duration="0:0:0.18"/></Storyboard></BeginStoryboard></Trigger.ExitActions>
+            </Trigger>
+          </ControlTemplate.Triggers>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+  <!-- a whole card that is a button: lifts on hover -->
+  <Style x:Key="Tile" TargetType="Button">
+    <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+    <Setter Property="Foreground" Value="{DynamicResource B.Text}"/>
+    <Setter Property="Cursor" Value="Hand"/>
+    <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="Button">
+          <Grid x:Name="root" RenderTransformOrigin="0.5,0.5">
+            <Grid.RenderTransform>
+              <TransformGroup><ScaleTransform x:Name="sc"/><TranslateTransform x:Name="lift"/></TransformGroup>
+            </Grid.RenderTransform>
+            <Border x:Name="bg" CornerRadius="16" Background="{DynamicResource B.Surface}" BorderBrush="{DynamicResource B.Border}" BorderThickness="1"/>
+            <Border x:Name="hover" CornerRadius="16" BorderBrush="{DynamicResource B.BorderStrong}" BorderThickness="1" Background="{DynamicResource B.HoverOverlay}" Opacity="0"/>
+            <ContentPresenter Margin="18,16" HorizontalAlignment="Stretch"/>
+          </Grid>
+          <ControlTemplate.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+              <Trigger.EnterActions><BeginStoryboard><Storyboard>
+                <DoubleAnimation Storyboard.TargetName="hover" Storyboard.TargetProperty="Opacity" To="1" Duration="0:0:0.16"/>
+                <DoubleAnimation Storyboard.TargetName="lift" Storyboard.TargetProperty="Y" To="-2" Duration="0:0:0.22" EasingFunction="{StaticResource EaseOut}"/>
+              </Storyboard></BeginStoryboard></Trigger.EnterActions>
+              <Trigger.ExitActions><BeginStoryboard><Storyboard>
+                <DoubleAnimation Storyboard.TargetName="hover" Storyboard.TargetProperty="Opacity" To="0" Duration="0:0:0.24"/>
+                <DoubleAnimation Storyboard.TargetName="lift" Storyboard.TargetProperty="Y" To="0" Duration="0:0:0.28" EasingFunction="{StaticResource EaseOut}"/>
+              </Storyboard></BeginStoryboard></Trigger.ExitActions>
+            </Trigger>
+            <Trigger Property="IsPressed" Value="True">
+              <Trigger.EnterActions><BeginStoryboard><Storyboard>
+                <DoubleAnimation Storyboard.TargetName="sc" Storyboard.TargetProperty="ScaleX" To="0.985" Duration="0:0:0.08"/>
+                <DoubleAnimation Storyboard.TargetName="sc" Storyboard.TargetProperty="ScaleY" To="0.985" Duration="0:0:0.08"/>
+              </Storyboard></BeginStoryboard></Trigger.EnterActions>
+              <Trigger.ExitActions><BeginStoryboard><Storyboard>
+                <DoubleAnimation Storyboard.TargetName="sc" Storyboard.TargetProperty="ScaleX" To="1" Duration="0:0:0.3"><DoubleAnimation.EasingFunction><BackEase EasingMode="EaseOut" Amplitude="0.5"/></DoubleAnimation.EasingFunction></DoubleAnimation>
+                <DoubleAnimation Storyboard.TargetName="sc" Storyboard.TargetProperty="ScaleY" To="1" Duration="0:0:0.3"><DoubleAnimation.EasingFunction><BackEase EasingMode="EaseOut" Amplitude="0.5"/></DoubleAnimation.EasingFunction></DoubleAnimation>
+              </Storyboard></BeginStoryboard></Trigger.ExitActions>
+            </Trigger>
+          </ControlTemplate.Triggers>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+
+  <!-- sidebar navigation -->
+  <Style x:Key="Nav" TargetType="RadioButton">
+    <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+    <Setter Property="Cursor" Value="Hand"/>
+    <Setter Property="Height" Value="40"/>
+    <Setter Property="Margin" Value="0,0,0,4"/>
+    <Setter Property="GroupName" Value="nav"/>
+    <Setter Property="Foreground" Value="{DynamicResource B.Text2}"/>
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="RadioButton">
+          <Grid Background="Transparent">
+            <Border x:Name="hover" CornerRadius="10" Background="{DynamicResource B.HoverOverlay}" Opacity="0"/>
+            <StackPanel Orientation="Horizontal" Margin="14,0,0,0" VerticalAlignment="Center">
+              <TextBlock x:Name="glyph" Text="{TemplateBinding Tag}" FontFamily="{StaticResource IconFont}" FontSize="16" Width="20" VerticalAlignment="Center" Foreground="{TemplateBinding Foreground}"/>
+              <ContentPresenter Margin="12,0,0,0" VerticalAlignment="Center"/>
+            </StackPanel>
+          </Grid>
+          <ControlTemplate.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+              <Trigger.EnterActions><BeginStoryboard><Storyboard><DoubleAnimation Storyboard.TargetName="hover" Storyboard.TargetProperty="Opacity" To="1" Duration="0:0:0.12"/></Storyboard></BeginStoryboard></Trigger.EnterActions>
+              <Trigger.ExitActions><BeginStoryboard><Storyboard><DoubleAnimation Storyboard.TargetName="hover" Storyboard.TargetProperty="Opacity" To="0" Duration="0:0:0.2"/></Storyboard></BeginStoryboard></Trigger.ExitActions>
+            </Trigger>
+            <Trigger Property="IsChecked" Value="True">
+              <Setter Property="Foreground" Value="{DynamicResource B.Text}"/>
+              <Setter Property="FontWeight" Value="SemiBold"/>
+              <Setter TargetName="glyph" Property="Foreground" Value="{DynamicResource B.Accent}"/>
+              <Setter TargetName="hover" Property="Visibility" Value="Collapsed"/>
+            </Trigger>
+          </ControlTemplate.Triggers>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+
+  <!-- segmented control item -->
+  <Style x:Key="Segment" TargetType="RadioButton">
+    <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+    <Setter Property="Cursor" Value="Hand"/>
+    <Setter Property="Height" Value="30"/>
+    <Setter Property="MinWidth" Value="44"/>
+    <Setter Property="Padding" Value="12,0"/>
+    <Setter Property="FontSize" Value="12.5"/>
+    <Setter Property="Foreground" Value="{DynamicResource B.Text2}"/>
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="RadioButton">
+          <Grid Background="Transparent">
+            <Border x:Name="on" CornerRadius="7" Background="{DynamicResource B.SegActive}" BorderBrush="{DynamicResource B.Border}" BorderThickness="1" Opacity="0"/>
+            <ContentPresenter Margin="{TemplateBinding Padding}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+          </Grid>
+          <ControlTemplate.Triggers>
+            <Trigger Property="IsChecked" Value="True">
+              <Setter Property="Foreground" Value="{DynamicResource B.Text}"/>
+              <Setter Property="FontWeight" Value="SemiBold"/>
+              <Trigger.EnterActions><BeginStoryboard><Storyboard><DoubleAnimation Storyboard.TargetName="on" Storyboard.TargetProperty="Opacity" To="1" Duration="0:0:0.18"/></Storyboard></BeginStoryboard></Trigger.EnterActions>
+              <Trigger.ExitActions><BeginStoryboard><Storyboard><DoubleAnimation Storyboard.TargetName="on" Storyboard.TargetProperty="Opacity" To="0" Duration="0:0:0.18"/></Storyboard></BeginStoryboard></Trigger.ExitActions>
+            </Trigger>
+          </ControlTemplate.Triggers>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+  <Style x:Key="SegmentHost" TargetType="Border">
+    <Setter Property="Background" Value="{DynamicResource B.Surface2}"/>
+    <Setter Property="BorderBrush" Value="{DynamicResource B.Border}"/>
+    <Setter Property="BorderThickness" Value="1"/>
+    <Setter Property="CornerRadius" Value="9"/>
+    <Setter Property="Padding" Value="2"/>
+  </Style>
+
+  <!-- toggle switch -->
+  <Style x:Key="Switch" TargetType="CheckBox">
+    <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+    <Setter Property="Foreground" Value="{DynamicResource B.Text}"/>
+    <Setter Property="Cursor" Value="Hand"/>
+    <Setter Property="VerticalAlignment" Value="Center"/>
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="CheckBox">
+          <Grid x:Name="root" Width="42" Height="24" Background="Transparent">
+            <Border x:Name="off" CornerRadius="12" Background="{DynamicResource B.Track}" BorderBrush="{DynamicResource B.BorderStrong}" BorderThickness="1"/>
+            <Border x:Name="on" CornerRadius="12" Background="{DynamicResource B.Accent}" Opacity="0"/>
+            <Grid HorizontalAlignment="Left" Margin="4,0,0,0" Width="16" Height="16">
+              <Grid.RenderTransform><TranslateTransform x:Name="knob"/></Grid.RenderTransform>
+              <Ellipse Fill="{DynamicResource B.Knob}"/>
+              <Ellipse x:Name="knobOn" Fill="#FFFFFF" Opacity="0"/>
+            </Grid>
+          </Grid>
+          <ControlTemplate.Triggers>
+            <Trigger Property="IsChecked" Value="True">
+              <Trigger.EnterActions><BeginStoryboard><Storyboard>
+                <DoubleAnimation Storyboard.TargetName="knob" Storyboard.TargetProperty="X" To="18" Duration="0:0:0.24"><DoubleAnimation.EasingFunction><BackEase EasingMode="EaseOut" Amplitude="0.35"/></DoubleAnimation.EasingFunction></DoubleAnimation>
+                <DoubleAnimation Storyboard.TargetName="on" Storyboard.TargetProperty="Opacity" To="1" Duration="0:0:0.18"/>
+                <DoubleAnimation Storyboard.TargetName="knobOn" Storyboard.TargetProperty="Opacity" To="1" Duration="0:0:0.18"/>
+              </Storyboard></BeginStoryboard></Trigger.EnterActions>
+              <Trigger.ExitActions><BeginStoryboard><Storyboard>
+                <DoubleAnimation Storyboard.TargetName="knob" Storyboard.TargetProperty="X" To="0" Duration="0:0:0.24"><DoubleAnimation.EasingFunction><BackEase EasingMode="EaseOut" Amplitude="0.35"/></DoubleAnimation.EasingFunction></DoubleAnimation>
+                <DoubleAnimation Storyboard.TargetName="on" Storyboard.TargetProperty="Opacity" To="0" Duration="0:0:0.18"/>
+                <DoubleAnimation Storyboard.TargetName="knobOn" Storyboard.TargetProperty="Opacity" To="0" Duration="0:0:0.18"/>
+              </Storyboard></BeginStoryboard></Trigger.ExitActions>
+            </Trigger>
+            <Trigger Property="IsEnabled" Value="False">
+              <Setter TargetName="root" Property="Opacity" Value="0.4"/>
+            </Trigger>
+          </ControlTemplate.Triggers>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+
+  <!-- selectable row with a radio dot (download sources) -->
+  <Style x:Key="SourceRow" TargetType="RadioButton">
+    <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+    <Setter Property="Foreground" Value="{DynamicResource B.Text}"/>
+    <Setter Property="Cursor" Value="Hand"/>
+    <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="RadioButton">
+          <Grid x:Name="root" Background="Transparent" MinHeight="46">
+            <Border x:Name="hover" CornerRadius="10" Background="{DynamicResource B.HoverOverlay}" Opacity="0"/>
+            <Grid Margin="12,0">
+              <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+              <Grid Width="18" Height="18" VerticalAlignment="Center">
+                <Ellipse x:Name="ring" Stroke="{DynamicResource B.BorderStrong}" StrokeThickness="1.5"/>
+                <Ellipse x:Name="dot" Width="8" Height="8" Fill="{DynamicResource B.AccentText}" RenderTransformOrigin="0.5,0.5" Opacity="0">
+                  <Ellipse.RenderTransform><ScaleTransform x:Name="dotScale" ScaleX="0.3" ScaleY="0.3"/></Ellipse.RenderTransform>
+                </Ellipse>
+              </Grid>
+              <ContentPresenter Grid.Column="1" Margin="12,0,0,0" VerticalAlignment="Center" HorizontalAlignment="Stretch"/>
+            </Grid>
+          </Grid>
+          <ControlTemplate.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+              <Trigger.EnterActions><BeginStoryboard><Storyboard><DoubleAnimation Storyboard.TargetName="hover" Storyboard.TargetProperty="Opacity" To="1" Duration="0:0:0.12"/></Storyboard></BeginStoryboard></Trigger.EnterActions>
+              <Trigger.ExitActions><BeginStoryboard><Storyboard><DoubleAnimation Storyboard.TargetName="hover" Storyboard.TargetProperty="Opacity" To="0" Duration="0:0:0.2"/></Storyboard></BeginStoryboard></Trigger.ExitActions>
+            </Trigger>
+            <Trigger Property="IsChecked" Value="True">
+              <Setter TargetName="ring" Property="Fill" Value="{DynamicResource B.Accent}"/>
+              <Setter TargetName="ring" Property="Stroke" Value="{DynamicResource B.Accent}"/>
+              <Trigger.EnterActions><BeginStoryboard><Storyboard>
+                <DoubleAnimation Storyboard.TargetName="dot" Storyboard.TargetProperty="Opacity" To="1" Duration="0:0:0.12"/>
+                <DoubleAnimation Storyboard.TargetName="dotScale" Storyboard.TargetProperty="ScaleX" To="1" Duration="0:0:0.26"><DoubleAnimation.EasingFunction><BackEase EasingMode="EaseOut" Amplitude="0.6"/></DoubleAnimation.EasingFunction></DoubleAnimation>
+                <DoubleAnimation Storyboard.TargetName="dotScale" Storyboard.TargetProperty="ScaleY" To="1" Duration="0:0:0.26"><DoubleAnimation.EasingFunction><BackEase EasingMode="EaseOut" Amplitude="0.6"/></DoubleAnimation.EasingFunction></DoubleAnimation>
+              </Storyboard></BeginStoryboard></Trigger.EnterActions>
+              <Trigger.ExitActions><BeginStoryboard><Storyboard>
+                <DoubleAnimation Storyboard.TargetName="dot" Storyboard.TargetProperty="Opacity" To="0" Duration="0:0:0.12"/>
+                <DoubleAnimation Storyboard.TargetName="dotScale" Storyboard.TargetProperty="ScaleX" To="0.3" Duration="0:0:0.12"/>
+                <DoubleAnimation Storyboard.TargetName="dotScale" Storyboard.TargetProperty="ScaleY" To="0.3" Duration="0:0:0.12"/>
+              </Storyboard></BeginStoryboard></Trigger.ExitActions>
+            </Trigger>
+            <Trigger Property="IsEnabled" Value="False">
+              <Setter TargetName="root" Property="Opacity" Value="0.55"/>
+            </Trigger>
+          </ControlTemplate.Triggers>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+
+  <!-- selectable install target card -->
+  <Style x:Key="TargetCard" TargetType="RadioButton">
+    <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+    <Setter Property="Foreground" Value="{DynamicResource B.Text}"/>
+    <Setter Property="Cursor" Value="Hand"/>
+    <Setter Property="Margin" Value="0,0,0,10"/>
+    <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="RadioButton">
+          <Grid x:Name="root" RenderTransformOrigin="0.5,0.5">
+            <Grid.RenderTransform><ScaleTransform x:Name="sc"/></Grid.RenderTransform>
+            <Border x:Name="bg" CornerRadius="14" Background="{DynamicResource B.Surface2}" BorderBrush="{DynamicResource B.Border}" BorderThickness="1"/>
+            <Border x:Name="sel" CornerRadius="14" Background="{DynamicResource B.AccentSoft}" BorderBrush="{DynamicResource B.Accent}" BorderThickness="1.5" Opacity="0"/>
+            <Border x:Name="hover" CornerRadius="14" Background="{DynamicResource B.HoverOverlay}" Opacity="0"/>
+            <Grid Margin="16,14">
+              <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+              <ContentPresenter/>
+              <Grid Grid.Column="1" Width="22" Height="22" VerticalAlignment="Center" Margin="12,0,0,0">
+                <Ellipse x:Name="ring" Stroke="{DynamicResource B.BorderStrong}" StrokeThickness="1.5"/>
+                <Grid x:Name="check" Opacity="0" RenderTransformOrigin="0.5,0.5">
+                  <Grid.RenderTransform><ScaleTransform x:Name="checkScale" ScaleX="0.4" ScaleY="0.4"/></Grid.RenderTransform>
+                  <Ellipse Fill="{DynamicResource B.Accent}"/>
+                  <TextBlock Text="&#xE73E;" FontFamily="{StaticResource IconFont}" FontSize="11" Foreground="{DynamicResource B.AccentText}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                </Grid>
+              </Grid>
+            </Grid>
+          </Grid>
+          <ControlTemplate.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+              <Trigger.EnterActions><BeginStoryboard><Storyboard><DoubleAnimation Storyboard.TargetName="hover" Storyboard.TargetProperty="Opacity" To="1" Duration="0:0:0.12"/></Storyboard></BeginStoryboard></Trigger.EnterActions>
+              <Trigger.ExitActions><BeginStoryboard><Storyboard><DoubleAnimation Storyboard.TargetName="hover" Storyboard.TargetProperty="Opacity" To="0" Duration="0:0:0.2"/></Storyboard></BeginStoryboard></Trigger.ExitActions>
+            </Trigger>
+            <Trigger Property="IsChecked" Value="True">
+              <Trigger.EnterActions><BeginStoryboard><Storyboard>
+                <DoubleAnimation Storyboard.TargetName="sel" Storyboard.TargetProperty="Opacity" To="1" Duration="0:0:0.18"/>
+                <DoubleAnimation Storyboard.TargetName="check" Storyboard.TargetProperty="Opacity" To="1" Duration="0:0:0.14"/>
+                <DoubleAnimation Storyboard.TargetName="checkScale" Storyboard.TargetProperty="ScaleX" To="1" Duration="0:0:0.3"><DoubleAnimation.EasingFunction><BackEase EasingMode="EaseOut" Amplitude="0.7"/></DoubleAnimation.EasingFunction></DoubleAnimation>
+                <DoubleAnimation Storyboard.TargetName="checkScale" Storyboard.TargetProperty="ScaleY" To="1" Duration="0:0:0.3"><DoubleAnimation.EasingFunction><BackEase EasingMode="EaseOut" Amplitude="0.7"/></DoubleAnimation.EasingFunction></DoubleAnimation>
+              </Storyboard></BeginStoryboard></Trigger.EnterActions>
+              <Trigger.ExitActions><BeginStoryboard><Storyboard>
+                <DoubleAnimation Storyboard.TargetName="sel" Storyboard.TargetProperty="Opacity" To="0" Duration="0:0:0.18"/>
+                <DoubleAnimation Storyboard.TargetName="check" Storyboard.TargetProperty="Opacity" To="0" Duration="0:0:0.12"/>
+                <DoubleAnimation Storyboard.TargetName="checkScale" Storyboard.TargetProperty="ScaleX" To="0.4" Duration="0:0:0.12"/>
+                <DoubleAnimation Storyboard.TargetName="checkScale" Storyboard.TargetProperty="ScaleY" To="0.4" Duration="0:0:0.12"/>
+              </Storyboard></BeginStoryboard></Trigger.ExitActions>
+            </Trigger>
+          </ControlTemplate.Triggers>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+
+  <!-- spinner -->
+  <Style x:Key="Spinner" TargetType="ContentControl">
+    <Setter Property="Width" Value="18"/>
+    <Setter Property="Height" Value="18"/>
+    <Setter Property="Foreground" Value="{DynamicResource B.Accent}"/>
+    <Setter Property="IsHitTestVisible" Value="False"/>
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="ContentControl">
+          <Viewbox>
+            <Grid Width="18" Height="18">
+              <Ellipse Stroke="{TemplateBinding Foreground}" StrokeThickness="2" Opacity="0.18"/>
+              <Path Stroke="{TemplateBinding Foreground}" StrokeThickness="2" StrokeStartLineCap="Round" StrokeEndLineCap="Round" Data="M 9,1 A 8,8 0 0 1 17,9" RenderTransformOrigin="0.5,0.5">
+                <Path.RenderTransform><RotateTransform/></Path.RenderTransform>
+                <Path.Triggers>
+                  <EventTrigger RoutedEvent="FrameworkElement.Loaded">
+                    <BeginStoryboard><Storyboard RepeatBehavior="Forever"><DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).(RotateTransform.Angle)" From="0" To="360" Duration="0:0:0.75"/></Storyboard></BeginStoryboard>
+                  </EventTrigger>
+                </Path.Triggers>
+              </Path>
+            </Grid>
+          </Viewbox>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+
+  <!-- thin overlay scrollbars -->
+  <Style x:Key="ThinScrollBar" TargetType="ScrollBar">
+    <Setter Property="Width" Value="10"/>
+    <Setter Property="MinWidth" Value="10"/>
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="ScrollBar">
+          <Grid x:Name="root" Background="Transparent" Opacity="0.55">
+            <Track x:Name="PART_Track" IsDirectionReversed="True">
+              <Track.Thumb>
+                <Thumb>
+                  <Thumb.Template>
+                    <ControlTemplate TargetType="Thumb">
+                      <Border x:Name="t" CornerRadius="3" Width="6" Background="{DynamicResource B.Scroll}" HorizontalAlignment="Center"/>
+                      <ControlTemplate.Triggers>
+                        <Trigger Property="IsDragging" Value="True"><Setter TargetName="t" Property="Width" Value="8"/></Trigger>
+                      </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                  </Thumb.Template>
+                </Thumb>
+              </Track.Thumb>
+            </Track>
+          </Grid>
+          <ControlTemplate.Triggers>
+            <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="root" Property="Opacity" Value="1"/></Trigger>
+          </ControlTemplate.Triggers>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+  <Style TargetType="ScrollViewer">
+    <Setter Property="HorizontalScrollBarVisibility" Value="Disabled"/>
+    <Setter Property="VerticalScrollBarVisibility" Value="Auto"/>
+    <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="ScrollViewer">
+          <Grid>
+            <ScrollContentPresenter CanContentScroll="{TemplateBinding CanContentScroll}" Margin="{TemplateBinding Padding}"/>
+            <ScrollBar x:Name="PART_VerticalScrollBar" Style="{StaticResource ThinScrollBar}" HorizontalAlignment="Right" Margin="0,6,3,6"
+                       Value="{TemplateBinding VerticalOffset}" Maximum="{TemplateBinding ScrollableHeight}" ViewportSize="{TemplateBinding ViewportHeight}"
+                       Visibility="{TemplateBinding ComputedVerticalScrollBarVisibility}"/>
+          </Grid>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+
+  <Style TargetType="ToolTip">
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="ToolTip">
+          <Border CornerRadius="8" Background="{DynamicResource B.ToastBg}" Padding="10,6" Margin="6">
+            <ContentPresenter TextElement.Foreground="{DynamicResource B.ToastText}" TextElement.FontSize="12"/>
+          </Border>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+
+  <Style x:Key="LogBox" TargetType="TextBox">
+    <Setter Property="IsReadOnly" Value="True"/>
+    <Setter Property="BorderThickness" Value="0"/>
+    <Setter Property="Background" Value="Transparent"/>
+    <Setter Property="Foreground" Value="{DynamicResource B.Text2}"/>
+    <Setter Property="FontFamily" Value="{StaticResource MonoFont}"/>
+    <Setter Property="FontSize" Value="11.5"/>
+    <Setter Property="TextWrapping" Value="Wrap"/>
+    <Setter Property="VerticalScrollBarVisibility" Value="Auto"/>
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="TextBox">
+          <ScrollViewer x:Name="PART_ContentHost" Padding="{TemplateBinding Padding}"/>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+
+  <!-- chips -->
+  <Style x:Key="Chip" TargetType="Border">
+    <Setter Property="CornerRadius" Value="999"/>
+    <Setter Property="Padding" Value="9,3"/>
+    <Setter Property="Background" Value="{DynamicResource B.ChipBg}"/>
+    <Setter Property="VerticalAlignment" Value="Center"/>
+  </Style>
+
+  <!-- item templates -->
+  <DataTemplate x:Key="StepTemplate">
+    <Grid Height="36">
+      <Grid.ColumnDefinitions><ColumnDefinition Width="30"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+      <Grid Width="20" Height="20" HorizontalAlignment="Left">
+        <Ellipse x:Name="pending" Stroke="{DynamicResource B.BorderStrong}" StrokeThickness="1.5" Width="14" Height="14"/>
+        <ContentControl x:Name="spin" Style="{StaticResource Spinner}" Width="18" Height="18" Visibility="Collapsed"/>
+        <Grid x:Name="done" Visibility="Collapsed" RenderTransformOrigin="0.5,0.5">
+          <Grid.RenderTransform><ScaleTransform x:Name="doneScale"/></Grid.RenderTransform>
+          <Ellipse x:Name="doneBg" Fill="{DynamicResource B.Success}"/>
+          <TextBlock x:Name="doneGlyph" Text="&#xE73E;" FontFamily="{StaticResource IconFont}" FontSize="10" Foreground="#FFFFFF" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+        </Grid>
+      </Grid>
+      <TextBlock x:Name="title" Grid.Column="1" Text="{Binding Title}" VerticalAlignment="Center" Foreground="{DynamicResource B.Text3}" FontSize="13.5"/>
+      <TextBlock x:Name="detail" Grid.Column="2" Text="{Binding Detail}" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="16,0,0,0" Foreground="{DynamicResource B.Text3}" FontSize="12" TextTrimming="CharacterEllipsis"/>
+    </Grid>
+    <DataTemplate.Triggers>
+      <DataTrigger Binding="{Binding State}" Value="Active">
+        <Setter TargetName="pending" Property="Visibility" Value="Collapsed"/>
+        <Setter TargetName="spin" Property="Visibility" Value="Visible"/>
+        <Setter TargetName="title" Property="Foreground" Value="{DynamicResource B.Text}"/>
+        <Setter TargetName="title" Property="FontWeight" Value="SemiBold"/>
+        <Setter TargetName="detail" Property="Foreground" Value="{DynamicResource B.Text2}"/>
+      </DataTrigger>
+      <DataTrigger Binding="{Binding State}" Value="Done">
+        <Setter TargetName="pending" Property="Visibility" Value="Collapsed"/>
+        <Setter TargetName="done" Property="Visibility" Value="Visible"/>
+        <Setter TargetName="title" Property="Foreground" Value="{DynamicResource B.Text}"/>
+        <DataTrigger.EnterActions><BeginStoryboard><Storyboard>
+          <DoubleAnimation Storyboard.TargetName="doneScale" Storyboard.TargetProperty="ScaleX" From="0.2" To="1" Duration="0:0:0.34"><DoubleAnimation.EasingFunction><BackEase EasingMode="EaseOut" Amplitude="0.8"/></DoubleAnimation.EasingFunction></DoubleAnimation>
+          <DoubleAnimation Storyboard.TargetName="doneScale" Storyboard.TargetProperty="ScaleY" From="0.2" To="1" Duration="0:0:0.34"><DoubleAnimation.EasingFunction><BackEase EasingMode="EaseOut" Amplitude="0.8"/></DoubleAnimation.EasingFunction></DoubleAnimation>
+        </Storyboard></BeginStoryboard></DataTrigger.EnterActions>
+      </DataTrigger>
+      <DataTrigger Binding="{Binding State}" Value="Warning">
+        <Setter TargetName="pending" Property="Visibility" Value="Collapsed"/>
+        <Setter TargetName="done" Property="Visibility" Value="Visible"/>
+        <Setter TargetName="doneBg" Property="Fill" Value="{DynamicResource B.Warning}"/>
+        <Setter TargetName="doneGlyph" Property="Text" Value="!"/>
+        <Setter TargetName="doneGlyph" Property="FontFamily" Value="Segoe UI"/>
+        <Setter TargetName="doneGlyph" Property="FontWeight" Value="Bold"/>
+        <Setter TargetName="doneGlyph" Property="FontSize" Value="12"/>
+        <Setter TargetName="title" Property="Foreground" Value="{DynamicResource B.Text}"/>
+        <Setter TargetName="detail" Property="Foreground" Value="{DynamicResource B.Warning}"/>
+      </DataTrigger>
+      <DataTrigger Binding="{Binding State}" Value="Failed">
+        <Setter TargetName="pending" Property="Visibility" Value="Collapsed"/>
+        <Setter TargetName="done" Property="Visibility" Value="Visible"/>
+        <Setter TargetName="doneBg" Property="Fill" Value="{DynamicResource B.Danger}"/>
+        <Setter TargetName="doneGlyph" Property="Text" Value="&#xE711;"/>
+        <Setter TargetName="doneGlyph" Property="FontSize" Value="9"/>
+        <Setter TargetName="title" Property="Foreground" Value="{DynamicResource B.Danger}"/>
+        <Setter TargetName="detail" Property="Foreground" Value="{DynamicResource B.Danger}"/>
+      </DataTrigger>
+      <DataTrigger Binding="{Binding State}" Value="Skipped">
+        <Setter TargetName="pending" Property="StrokeDashArray" Value="2 2"/>
+        <Setter TargetName="title" Property="Foreground" Value="{DynamicResource B.Text2}"/>
+      </DataTrigger>
+    </DataTemplate.Triggers>
+  </DataTemplate>
+</ResourceDictionary>

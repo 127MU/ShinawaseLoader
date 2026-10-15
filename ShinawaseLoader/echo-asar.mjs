@@ -10,6 +10,11 @@ const nativeHostMarker = '/* shinawase-loader-native-host-v1 */';
 const preloadMarker = '/* shinawase-loader-preload-bridge-v1 */';
 const playbackMarker = '/* shinawase-loader-streaming-playback-v2 */';
 const playbackMarkerV1 = '/* shinawase-loader-streaming-playback-v1 */';
+const splashMarker = '/* shinawase-loader-startup-splash-v1 */';
+// Bump when the blocks injected into the main entry change, so runtime-sync
+// rebuilds isolated runtimes that were patched by an older Loader.
+// 2: startup splash block.
+const PATCH_REVISION = 2;
 const MAIN_ENTRY = 'out/main/index.js';
 const PRELOAD_ENTRY = 'out/preload/index.mjs';
 const STEAM_STREAMING_REJECT = 'Music streaming playback is not available in the Steam distribution.';
@@ -368,6 +373,34 @@ const nativeHostBridge = `${nativeHostMarker}
 })();
 `;
 
+// Runs first in the main entry, so startup-splash.cjs can watch for ECHO's
+// main window and be ready before ECHO's own app-ready work. The splash itself
+// lives in the Loader folder and updates with the Loader.
+const splashBridge = `${splashMarker}
+(() => {
+  try {
+    const builtin = (name) => process.getBuiltinModule?.(name);
+    const fs = builtin('node:fs');
+    const path = builtin('node:path');
+    const nodeModule = builtin('node:module');
+    if (!fs || !path || !nodeModule || typeof app === 'undefined') return;
+    const installRoot = process.env.ECHO_MOD_ROOT || (process.platform === 'darwin'
+      ? (() => {
+        const appBundle = path.dirname(path.dirname(process.resourcesPath));
+        const parent = path.dirname(appBundle);
+        return path.basename(parent) === 'modded-runtime' ? path.dirname(path.dirname(parent)) : path.dirname(appBundle);
+      })()
+      : path.dirname(process.resourcesPath));
+    const loaderRoot = process.env.ECHO_MOD_HOME || path.join(installRoot, 'ShinawaseLoader');
+    const script = path.join(loaderRoot, 'startup-splash.cjs');
+    if (!fs.existsSync(script)) return;
+    nodeModule.createRequire(script)(script).installShinawaseStartupSplash?.({ loaderRoot });
+  } catch (error) {
+    try { console.warn('[ShinawaseLoader] startup splash unavailable', error); } catch {}
+  }
+})();
+`;
+
 // The Steam preload intentionally leaves these namespaces empty. The community
 // streaming Mod still needs the existing main-process IPC service, so expose
 // only its typed method surface without restoring ECHO's native pages.
@@ -381,7 +414,16 @@ const createShinawaseStreamingApi = (ipc, channels) => ({
   resolvePlayback: (request) => ipc.invoke(channels.StreamingResolvePlayback, request),
   resolveLive: (request) => ipc.invoke(channels.StreamingResolveLive, request),
   analyzeBpm: (request) => ipc.invoke(channels.StreamingAnalyzeBpm, request),
-  getLyrics: (request) => ipc.invoke(channels.StreamingGetLyrics, request),
+  // A rejected or lineless streaming lyric must not abort the lyrics page.
+  // That page only reads stored candidates after getLyrics resolves as "missing".
+  getLyrics: (request) => ipc.invoke(channels.StreamingGetLyrics, request).then((result) => {
+    const value = result && typeof result === 'object' ? result : {};
+    const lines = Array.isArray(value.lines) ? value.lines : [];
+    const plain = typeof value.plainLyrics === 'string' && value.plainLyrics.trim();
+    const synced = typeof value.syncedLyrics === 'string' && value.syncedLyrics.trim();
+    const hasText = lines.length > 0 || plain || synced || value.instrumental === true;
+    return Object.assign({ instrumental: false }, value, { lines: lines, status: hasText ? (value.status || 'ok') : 'missing' });
+  }).catch(() => ({ status: 'missing', lines: [], instrumental: false })),
   getMv: (request) => ipc.invoke(channels.StreamingGetMv, request),
   getProviders: () => ipc.invoke(channels.StreamingGetProviders),
   listAccountPlaylists: (provider) => ipc.invoke(channels.StreamingListAccountPlaylists, provider),
@@ -701,6 +743,8 @@ const patchSteamPlaylistsPage = (text) => {
   return next;
 };
 
+const injectSplashBridge = (text) => (text.includes(splashMarker) ? text : `${splashBridge}\n${text}`);
+
 const patch = (root) => {
   const archive = archiveFor(root);
   if (!existsSync(archive)) throw new Error(`app.asar_not_found:${archive}`);
@@ -722,7 +766,8 @@ const patch = (root) => {
   }
   const mainWithBridge = currentText.includes(marker) || currentText.includes('external-mod-loader:start:requested') ? currentText : `${bridge}\n${currentText}`;
   const mainWithNative = mainWithBridge.includes(nativeHostMarker) ? mainWithBridge : `${nativeHostBridge}\n${mainWithBridge}`;
-  const mainText = applyAuxiliaryWindowCrashFix(patchPlayback(mainWithNative));
+  const mainWithSplash = injectSplashBridge(mainWithNative);
+  const mainText = applyAuxiliaryWindowCrashFix(patchPlayback(mainWithSplash));
   const preloadText = patchPreload(currentPreloadText);
   const missingIntegrity = [main, preload, ...playlistPatches.map((item) => item.entry)].filter(Boolean).some((entry) => !entry.info.integrity);
   if (mainText === currentText && preloadText === currentPreloadText && !playlistPatches.length && !missingIntegrity) {
@@ -843,7 +888,7 @@ const verifyAnchors = (root) => {
   };
 };
 
-export { patch, restore, syncIntegrity, verifyAnchors, patchPreload };
+export { patch, restore, syncIntegrity, verifyAnchors, patchPreload, injectSplashBridge, PATCH_REVISION };
 
 const isMain = process.argv[1] && resolve(fileURLToPath(import.meta.url)) === resolve(process.argv[1]);
 if (isMain) {

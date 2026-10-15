@@ -343,7 +343,7 @@ export const importBundledPackages = (nodePath, echoRoot, loaderRoot, locale) =>
   if (!existsSync(packages)) return [];
   const enabled = [];
   const script = join(loaderRoot, 'ShinawaseLoader.mjs');
-  for (const name of ['ECHO-Streaming.echomod', 'ECHO-MV.echomod']) {
+  for (const name of ['ECHO-Streaming.echomod', 'ECHO-MV.echomod', 'ECHO-LyricsMatchWhitebox.echomod']) {
     const file = join(packages, name);
     if (!existsSync(file)) continue;
     const before = readModState(loaderRoot);

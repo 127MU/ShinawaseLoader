@@ -37,7 +37,8 @@ ShinawaseLoader 是 ECHO Steam（当前验证 echo-steam **26.9.1**，Electron 4
 | 能力 | 说明 |
 | --- | --- |
 | **全新注入 UI** · v1.6.0 | Mods 管理页、配置弹窗与 Loader 状态页（语言、调试、更新）。 |
-| **Shinawase 侧栏** · v1.8.0 | 侧栏「设置」上方常驻 **Shinawase** 一行。点右侧箭头（或按住向上拖）把整个侧栏切换成模组侧栏：Loader、Mod Market、Mods 和所有模组页面，页面多时可筛选；点标题栏、按住向下拖、在顶部继续向下滚或按 Esc 即可收起。直接点 Shinawase 会同时打开上次用过的页面。 |
+| **Shinawase 侧栏** · v1.8.0 | 侧栏「设置」上方常驻 **Shinawase** 一行。点右侧箭头（或按住向上拖）把整个侧栏切换成模组侧栏：Loader、Mod Market、Mods 和所有模组页面，页面多时可筛选；点标题栏、按住向下拖或按 Esc 即可收起（滚轮只滚动列表，不会收起侧栏）。直接点 Shinawase 会同时打开上次用过的页面。 |
+| **启动卡片** | 经隔离运行时启动 ECHO 时，先出现一张留白的长方形纸色卡片，用一笔线条写出 Shinawase。ECHO 主窗口若在动画播完前就绪，会等动画播完再出现；若还没就绪，卡片一直显示到 ECHO 出来。随后卡片收尾、清空，ECHO 窗口盖在它上面接管。可在 Loader 页「外观 → 启动动画」关闭，或用 `--no-startup-splash` / 环境变量 `SHINAWASE_STARTUP_SPLASH=0` 跳过；每次启动的时间线写在 `Logs/startup-splash.log`。 |
 | **Mod Market** · v1.7.0 | Shinawase 侧栏中的「Mod Market」。从官方目录浏览、搜索、安装和更新 `.echomod`，样式与 Mods 页同一套主题。 |
 | **自定义配置页** · v1.6.0 | 清单字段 `configUi` 指向自定义脚本；失败时回退到 `config.schema.json` 自动渲染。 |
 | 渲染进程注入 | 默认 `external-cdp`：经 Chrome DevTools Protocol 注入，不改 `ECHO.exe`。 |
@@ -52,6 +53,35 @@ ShinawaseLoader 是 ECHO Steam（当前验证 echo-steam **26.9.1**，Electron 4
 
 Windows 安装程序会扫描 Steam 库定位 `ECHO.exe` / `ECHO Steam.exe`（优先 `D:\SteamLibrary\steamapps\common\ECHO\ECHO.exe`，不会因路径排序默默选中 Playtest），把 Loader 复制到游戏目录旁，并创建空的 `Mods`、`Plugins` 投放文件夹。若本机缺少 Node，会自动下载 **22.23.2** 到当前用户缓存。全程无需管理员权限。可用 `ECHO_ROOT`、`--echo` 或 `%LOCALAPPDATA%\ShinawaseLoader\selection.json` 覆盖目标。macOS 与 Linux 用下方的 shell 安装器，不走这套 PowerShell 菜单。
 
+### 一键安装器（推荐）
+
+下载 `ShinawaseSetup-<版本>.exe`（约 4 MB，内含管理器、Loader 与预装包）双击 →「一键安装」即可。安装器使用简洁表单，可更改安装目录、选择安装后打开；默认装到 `%LOCALAPPDATA%\Programs\Shinawase Manager`（仅当前用户，无需管理员权限），并加入开始菜单和「设置 → 应用 → 已安装的应用」。安装完成后打开管理器，进入 ECHO 的安装流程。再次运行安装器会显示「更新到 vX」或「重新安装」，并提供卸载入口；卸载只移除管理器本身，ECHO 内的 Loader、Mods 与 Steam 启动项可在管理器设置中单独卸载。安装器拒绝覆盖没有安装标记的非空目录。
+
+```powershell
+.\scripts\build-setup.ps1            # 产出 release\ShinawaseSetup-<version>.exe
+```
+
+### Shinawase Manager（图形界面）
+
+安装器装好的管理器、发布包根目录的 `ShinawaseManager.exe`、以及源码目录里不带参数运行的 `setup-modloader.bat` 打开的是同一个程序——安装、更新与日常管理的一体化工具：
+
+- **一键安装 / 更新 / 修复**：自动扫描 Steam 库（读取 `appmanifest` 定位 ECHO 与 AppID，不自动选中 Playtest），分步显示进度与详细日志；失败时标出出错步骤，可重试或以管理员身份重试。
+- **自动检查更新**：打开时比对本地、已安装与最新版本；更新包经签名镜像清单（Ed25519）或 GitHub 获取，Node 仍按 `loader-version.json` 的 SHA-256 校验。
+- **自动选择下载源**：启动时对 Shinawase 镜像、华为云、阿里云、npmmirror、Node.js 官方并行测速，按速度依次尝试，失败自动换源；也可在设置里固定某个源。
+- **Steam 启动项**：检测每个 Steam 账户的启动项并一键写入 `"<游戏目录>\ECHO.modded.exe" %command%`。Steam 运行时会先征得同意并关闭 Steam（它退出时会覆盖配置），写入前备份 `localconfig.vdf`，原有参数保留在 `%command%` 之后；「恢复原设置」可原样还原。
+- **模组管理**：启用 / 停用 / 移除已安装的 Mods 与 Plugins，拖入 `.echomod` 即可导入，推荐包一键安装。
+- **启动与状态**：启动带 Mods 的 ECHO 并确认注入通道（CDP）就绪；侧栏实时显示运行状态。浅色 / 深色 / 跟随系统主题，中文 / English。
+
+未使用安装器时，管理器会复制到 `ShinawaseLoader\ShinawaseManager.exe` 并（可选）加入开始菜单。管理器从下载源装入更新版本后，会同步更新自己附带的 Loader 文件；Loader 自更新带来新的管理器源码时，它会在下次打开时自行重新编译。管理器用系统自带的 .NET Framework 编译器从 `ShinawaseLoader/manager/` 构建，无需额外运行库：
+
+```powershell
+.\scripts\build-manager.ps1 -Launch
+```
+
+### 控制台安装器
+
+带参数运行 `setup-modloader.bat` 时仍是原来的 PowerShell 安装器：
+
 ```powershell
 git clone https://github.com/ChunchunOwO/ShinawaseLoader.git
 cd ShinawaseLoader
@@ -60,7 +90,7 @@ cd ShinawaseLoader
 
 首次安装前可在主菜单选择「下载源」。默认使用镜像：Node 可选华为云、阿里云或 npmmirror，npm 包和原生构建头文件使用 npmmirror，Loader 自更新使用 ghproxy。安装器与自更新会先尝试自建下载镜像（默认 `http://43.248.10.82/shinawase`，提供 Node、npm 代理和经 Ed25519 签名的 Loader 更新包；搭建方法见 [`scripts/update-mirror/README.md`](scripts/update-mirror/README.md)），失败或内容校验不通过时自动改用上面的公共来源；可用 `loader.config.json` 的 `updateMirrors`、环境变量 `SHINAWASE_UPDATE_MIRRORS`（更新）/`SHINAWASE_MIRRORS`（安装器）覆盖，写 `none` 关闭。也可选择「官方源（直连）」让这些下载全部走官方地址。选择保存在当前用户的 `selection.json`，安装器和已安装 Loader 的后续更新共用；已有缓存不会重复下载。Mod Market 的包仍由目录中各作者提供的地址下载。
 
-安装结束后会进入 **可选包**：默认勾选 **ECHO Streaming** 和 **ECHO MV**。空格开关，Enter 导入到游戏 `Mods`。其他示例已归档为 [`examples/reference/`](examples/reference/) 参考 Mod，不出现在安装列表里。
+安装结束后会进入 **可选包**：默认勾选 **ECHO Streaming**、**ECHO MV** 和 **ECHO Lyrics Match Whitebox**。管理器安装选项提供「一键全部安装」；命令行可用空格开关，Enter 导入到游戏 `Mods`。其他示例已归档为 [`examples/reference/`](examples/reference/) 参考 Mod，不出现在安装列表里。
 
 Loader **不会取代** Steam 原版 `ECHO.exe` / `app.asar`。安装会在游戏目录旁生成独立的 `ECHO.modded.exe`（启动隔离运行时）。打完可选包后，安装程序会提示并把下面这一行复制到剪贴板——请写入 Steam 启动项：
 
@@ -94,7 +124,7 @@ macOS 安装器只认包含 `ECHO.app` 的目录（Steam 一般是 `~/Library/Ap
 ./start-mac.command
 ```
 
-在 Finder 里双击 `start-mac.command` 效果相同：找到 `ECHO.app` 后安装并启动。第一次会把附带的 ECHO Streaming 和 ECHO MV 导入并启用，侧栏里可以再开关。已经关掉的 Mod 不会被下次安装重新打开。已经知道目录时也可以指定：
+在 Finder 里双击 `start-mac.command` 效果相同：找到 `ECHO.app` 后安装并启动。第一次会把附带的 ECHO Streaming、ECHO MV 和 ECHO Lyrics Match Whitebox 导入并启用，侧栏里可以再开关。已经关掉的 Mod 不会被下次安装重新打开。已经知道目录时也可以指定：
 
 ```bash
 ./setup-modloader.sh --echo "<ECHO_ROOT>"
@@ -153,7 +183,7 @@ Linux 安装器认包含 `ECHO` 可执行文件和 `resources/app.asar` 的目�
 
 任选其一：
 
-1. 安装 Loader 时在 **可选包** 勾选 ECHO Streaming / ECHO MV（默认勾选），脚本会把对应 `.echomod` 导入游戏 `Mods` 并启用（`node ShinawaseLoader.mjs import <包> --enable`）。只对**新装**的包生效：先前已被你手动关掉的包，重复导入仍保持关闭。
+1. 安装 Loader 时在 **可选包** 勾选 ECHO Streaming / ECHO MV / ECHO Lyrics Match Whitebox（默认全选），或在管理器安装选项点击「一键全部安装」。脚本会把对应 `.echomod` 导入游戏 `Mods` 并启用（`node ShinawaseLoader.mjs import <包> --enable`）。只对**新装**的包生效：先前已被你手动关掉的包，重复导入仍保持关闭。
 2. 用 Loader 启动 ECHO 后，点侧栏「设置」上方的 **Shinawase** 展开模组侧栏，打开 **Mod Market**，从官方目录一键安装或更新。
 3. 打开应用内 **Mods** 页，导入 `.echomod` / `.echo`（也支持拖放）。
 4. 把包文件丢进游戏目录的 `Mods` 或 `Plugins` 文件夹，渲染进程就绪后会注入已启用的包。
@@ -284,6 +314,7 @@ flowchart TB
 
 - **CDP 注入**：HTML / CSS / JS / WASM、侧栏页面、`window.echo` 均在渲染进程可用。
 - **inspector bootstrap**：启动时带 `--inspect`，在主进程求值 `main-bootstrap.cjs`，注册 streaming / account IPC、`streaming-preload.cjs` 与 native host。
+- **启动卡片**：asar-bridge 在主入口最前面加载 `startup-splash.cjs`，在 app-ready 时打开 `startup-splash.html` 的卡片窗口，并暂存 ECHO 主窗口的 show / maximize，等动画播完后按原顺序重放。对话框、渲染崩溃、超时或退出都会让卡片立即让路。
 - **单实例**：Loader 监听 `17862`；日志写入 `ShinawaseLoader/Logs/loader.log` 与 `errors.log`。asar-bridge 发现 Loader 意外退出时会记录退出码并最多重启 3 次，Loader 自身的 stderr 落在 `Logs/loader-stderr.log`。
 
 ## 📁 目录结构
@@ -301,15 +332,20 @@ flowchart TB
 │   ├── main-bootstrap.cjs
 │   ├── native-host.cjs
 │   ├── native-shell-host.cjs
+│   ├── startup-splash.cjs     # 启动卡片：主进程控制
+│   ├── startup-splash.html    # 启动卡片：页面与动画（?demo=1 可在浏览器预览）
 │   ├── streaming-bridge.ts
 │   ├── streaming-preload.cjs
 │   ├── testing/               # 自动化测试 SDK（harness / validate / client / session / cli）
+│   ├── manager/               # Shinawase Manager（WPF 图形安装 / 管理器源码与 Node 辅助脚本）
 │   ├── mod-template/
 │   ├── plugin-template/
 │   ├── native-plugin-template/
 │   └── native/
 ├── scripts/                   # 安装 / 打包 / 发布
 │   ├── setup-modloader.ps1
+│   ├── build-manager.ps1      # 用系统 csc 编译 ShinawaseManager.exe
+│   ├── build-setup.ps1        # 打包一键安装器 ShinawaseSetup.exe
 │   ├── pack-echomod.mjs
 │   ├── build-release.ps1
 │   ├── build-native-host.ps1
@@ -319,7 +355,7 @@ flowchart TB
 ├── examples/                  # 官方示例（不随安装复制）
 │   ├── ECHO-MV/
 │   ├── ECHO-Streaming/
-│   ├── packages/              # 预装包：Streaming / MV
+│   ├── packages/              # 预装包：Streaming / MV / Lyrics Match Whitebox
 │   └── reference/             # 归档参考 Mod（不进安装器可选包）
 ├── tests/                     # 仓库自测（node --test "tests/*.test.mjs"，纯离线）
 ├── setup-modloader.bat
@@ -330,13 +366,14 @@ flowchart TB
 
 ## 🧩 示例 Mod
 
-源码在 [`examples/`](examples/)，打包说明见 [`examples/README.md`](examples/README.md)。安装脚本「可选包」只提供下面两个，默认勾选。
+源码在 [`examples/`](examples/)，打包说明见 [`examples/README.md`](examples/README.md)。安装脚本「可选包」提供上述三个，默认全选。
 
 从仓库根目录打包预装示例：
 
 ```powershell
 .\pack-mod.bat .\examples\ECHO-Streaming\echomod .\examples\packages\ECHO-Streaming.echomod --zip
 .\pack-mod.bat .\examples\ECHO-MV\echomod .\examples\packages\ECHO-MV.echomod --zip
+.\pack-mod.bat .\examples\ECHO-LyricsMatchWhitebox\echomod .\examples\packages\ECHO-LyricsMatchWhitebox.echomod --zip
 ```
 
 Pet、osu!downloader、AudioBand、Wallpaper Bridge、Together、Steam Listen Board、Auxiliary Fix 已归档为参考 Mod，见 [`examples/reference/`](examples/reference/)。不出现在安装器可选包中。

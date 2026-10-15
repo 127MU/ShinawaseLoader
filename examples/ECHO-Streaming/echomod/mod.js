@@ -54,6 +54,9 @@ const state = {
   ready: false, accepted: false, noticeOpen: false, noticeConsent: '', pendingAccountSync: null, providers: [], provider: String(stored.provider || config.defaultProvider || 'netease'), quality: qualities.includes(stored.quality) ? stored.quality : (qualities.includes(config.defaultQuality) ? config.defaultQuality : 'lossless'), qualityMenuOpen: false, activeTab: ['track', 'album', 'artist', 'playlist'].includes(stored.activeTab) ? stored.activeTab : 'track', input: String(stored.input || stored.query || ''), query: String(stored.query || ''), result: stored.result || null, loading: false, requestId: 0, error: null, actionError: null, actionMessage: null, selectedAlbum: null, selectedAlbumDetail: null, albumLoading: false, albumError: null, albumTrackLimit: albumInitialTrackCount, selectedArtist: null, selectedArtistDetail: null, artistLoading: false, artistError: null, selectedPlaylist: null, selectedPlaylistDetail: null, playlistLoading: false, playlistError: null, playlistTrackLimit: albumInitialTrackCount, playlistUrl: '', accountPlaylistProvider: 'netease', accountPlaylists: [], selectedAccountPlaylistIds: {}, accountPanelOpen: false, selectedAccountProvider: "netease", accountAdvancedOpen: false, loadingAccountPlaylists: false, syncingAccountPlaylistIds: {}, importingPlaylistKey: null, resolvingTrackKey: null, queuedTrackKey: null, downloadingTrackKey: null, downloadEnabled: false, downloadJobs: [], downloadJobIdsByTrackKey: {}, albumDownload: null, favoriteTrackIds: {}, favoriteTrackKey: null, failedCoverUrls: stored.failedCoverUrls || {}, currentStableKey: '', scrollTop: Number(stored.scrollTop) || 0, recentSearches: Array.isArray(stored.recentSearches) && stored.recentSearches.length ? stored.recentSearches.filter((item) => typeof item === 'string' && item.trim()).slice(0, 8) : searchShortcuts.slice(),
 };
 state.selectedLyricsTrack = null;
+state.playlistFilter = '';
+state.playbackState = 'paused';
+state.playbackTrackId = '';
 state.selectedLyrics = null;
 state.lyricsLoading = false;
 state.lyricsError = null;
@@ -126,11 +129,11 @@ const renderAccountDetailBody = (provider) => {
   if (status.connected) {
     actions.append(
       actionButton(busy === 'check' ? accountText('检查中...', 'Checking...') : accountText('检查', 'Check'), 'refresh', () => checkAccount(provider), { className: 'settings-action-button', disabled: Boolean(busy) }),
-      actionButton(accountText('退出', 'Sign out'), 'close', () => clearAccount(provider), { className: 'settings-danger-button', disabled: Boolean(busy) }),
+      actionButton(accountText('退出', 'Sign out'), 'logOut', () => clearAccount(provider), { className: 'settings-danger-button', disabled: Boolean(busy) }),
     );
   } else if (provider === 'netease') {
     actions.append(
-      actionButton(busy === 'login' ? accountText('准备扫码...', 'Starting...') : accountText('扫码登录', 'Scan QR'), 'link', startNeteaseQrLogin, { className: 'settings-action-button settings-account-login-button', disabled: Boolean(busy) }),
+      actionButton(busy === 'login' ? accountText('准备扫码...', 'Starting...') : accountText('扫码登录', 'Scan QR'), 'qr', startNeteaseQrLogin, { className: 'settings-action-button settings-account-login-button', disabled: Boolean(busy) }),
       actionButton(accountText('网页登录', 'Web login'), 'link', () => loginAccount('netease'), { className: 'settings-action-button', disabled: Boolean(busy) }),
     );
   } else if (provider === 'qobuz') {
@@ -430,9 +433,14 @@ iconPaths.users = '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle 
 iconPaths.chat = '<path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z"/>';
 iconPaths.spark = '<path d="M12 3v4M12 17v4M4.9 4.9l2.8 2.8M16.3 16.3l2.8 2.8M3 12h4M17 12h4M4.9 19.1l2.8-2.8M16.3 7.7l2.8-2.8"/>';
 iconPaths.more = '<circle cx="5" cy="12" r="1.6" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.6" fill="currentColor" stroke="none"/><circle cx="19" cy="12" r="1.6" fill="currentColor" stroke="none"/>';
+iconPaths.plus = '<path d="M12 5v14M5 12h14"/>';
+iconPaths.listPlus = '<path d="M4 6h16M4 12h10M4 18h10M19 14v8M15 18h8"/>';
+iconPaths.sync = '<path d="M3 7h7l2 2h9v10H3zM6 14h10m-3-3 3 3-3 3"/>';
+iconPaths.qr = '<path d="M3 3h6v6H3zM15 3h6v6h-6zM3 15h6v6H3zM15 15h2v2h-2zM21 15v6h-6M12 3v3M12 12h9M3 12h6M12 15v6"/>';
+iconPaths.logOut = '<path d="M9 4H4v16h5M9 12h12m-4-4 4 4-4 4"/>';
 const playlistIdentity = (playlist) => String(playlist?.id || playlist?.providerPlaylistId || playlist?.importedPlaylistId || playlist?.key || `${playlist?.provider || ''}:${playlist?.title || playlist?.name || ''}`);
 const makeIcon = (name, size = 16) => { const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); svg.setAttribute('width', String(size)); svg.setAttribute('height', String(size)); svg.setAttribute('viewBox', '0 0 24 24'); svg.setAttribute('fill', 'none'); svg.setAttribute('stroke', 'currentColor'); svg.setAttribute('stroke-width', '1.8'); svg.setAttribute('stroke-linecap', 'round'); svg.setAttribute('stroke-linejoin', 'round'); svg.setAttribute('aria-hidden', 'true'); svg.innerHTML = iconPaths[name] || ''; return svg; };
-const make = (tag, className = '', text = undefined) => { const node = document.createElement(tag); if (className) node.className = className; if (text instanceof Node) node.append(text); else if (text !== undefined) node.textContent = String(text ?? ''); return node; };
+const make = (tag, className = '', text = undefined) => { const node = document.createElement(tag); if (tag === 'button') className = `echo-streaming-button ${className}`.trim(); if (className) node.className = className; if (text instanceof Node) node.append(text); else if (text !== undefined) node.textContent = String(text ?? ''); return node; };
 const makeAccountProviderLogo = (provider, className) => {
   const fallback = (accountProviderLabels[provider] || provider).slice(0, 1);
   const logo = make('span', `${className} streaming-account-service-logo`, fallback);
@@ -446,7 +454,7 @@ const makeAccountProviderLogo = (provider, className) => {
   image.src = external.assetUrl(`provider-icons/${provider}.${provider === 'kugou' ? 'png' : 'svg'}`);
   return logo;
 };
-const actionButton = (label, iconName, handler, options = {}) => { const node = make('button', options.className || '', options.iconOnly ? undefined : label); node.type = 'button'; if (iconName) node.prepend(makeIcon(iconName, options.size || 16)); node.title = options.title || label; node.setAttribute('aria-label', options.ariaLabel || label); if (options.active !== undefined) node.dataset.active = String(options.active); if (options.disabled) node.disabled = true; node.addEventListener('click', (event) => { event.stopPropagation(); try { Promise.resolve(handler(event)).catch(reportError); } catch (error) { reportError(error); } }); return node; };
+const actionButton = (label, iconName, handler, options = {}) => { const node = make('button', `${options.className || ''}${options.iconOnly ? ' echo-streaming-icon-button' : ''}`, options.iconOnly ? undefined : label); node.type = 'button'; if (iconName) node.prepend(makeIcon(iconName, options.size || 16)); node.title = options.title || label; node.setAttribute('aria-label', options.ariaLabel || label); if (options.active !== undefined) node.dataset.active = String(options.active); if (options.disabled) node.disabled = true; node.addEventListener('click', (event) => { event.stopPropagation(); try { Promise.resolve(handler(event)).catch(reportError); } catch (error) { reportError(error); } }); return node; };
 const renderNeteasePhoneLogin = () => {
   const box = make('div', 'echo-streaming-phone-login');
   box.append(make('strong', '', ncmCopy.phoneLogin));
@@ -589,13 +597,85 @@ const schedulePlaybackPrepare = (track) => {
     prepareInFlight = work;
   }, 180);
 };
-const playCurrentStableKey = () => { const current = findPlaybackQueue()?.currentTrack; return current?.mediaType === 'streaming' ? String(current.stableKey || current.id || '') : ''; };
+const playCurrentStableKey = () => { const current = findPlaybackQueue()?.currentTrack; return current?.mediaType === 'streaming' && state.playbackState === 'playing' && state.playbackTrackId === String(current.id) ? String(current.stableKey || current.id || '') : ''; };
 const favoriteIdsFromSnapshot = (snapshot) => { const ids = {}; for (const items of Object.values(snapshot?.providers || {})) for (const item of items || []) ids[`${item.provider}:${item.providerTrackId}`] = true; for (const collection of snapshot?.collections || []) for (const item of collection.tracks || []) ids[`${item.provider}:${item.providerTrackId}`] = true; return ids; };
 const persistMemory = () => { try { external.settings?.set?.({ provider: state.provider, quality: state.quality, downloadQuality: state.downloadQuality, activeTab: state.activeTab, input: state.input, query: state.query, resultKey: state.result ? `${state.provider}:${state.activeTab}:${state.query.trim().toLocaleLowerCase()}` : null, result: state.result, failedCoverUrls: state.failedCoverUrls, scrollTop: state.scrollTop, recentSearches: state.recentSearches, dailyPlaylists: state.dailyPlaylists, dailyLastRefreshAt: state.dailyLastRefreshAt, dailySyncedKeys: state.dailySyncedKeys, autoRefreshDaily: state.autoRefreshDaily, autoSyncDaily: state.autoSyncDaily, dailySidebarCollapsed: state.dailySidebarCollapsed, dailySectionOpen: state.dailySectionOpen, dailyModuleOpen: state.dailyModuleOpen, accountSectionOpen: state.accountSectionOpen, similarAutoPlay: ncmUi.similarAutoPlay, similarCount: ncmUi.similarCount }); } catch {} };
 const rememberSearch = (query) => { const value = String(query || '').trim(); if (!value) return; state.recentSearches = [value, ...state.recentSearches.filter((item) => item !== value)].slice(0, 8); };
 const providerRailState = (provider) => accountAwareProviders.has(provider?.name) && provider.accountConnected !== true ? 'signedOut' : !provider?.enabled ? 'disabled' : accountAwareProviders.has(provider?.name) ? 'signedIn' : 'available';
 const providerRailStatus = (provider) => { const rail = providerRailState(provider); return rail === 'disabled' ? copy.disabled : rail === 'signedOut' ? copy.notLoggedIn : rail === 'signedIn' ? copy.loggedIn(provider.accountDisplayName || provider.displayName) : copy.available; };
 let packageDisposed = false;
+// The host can retain a playing icon when a streaming session's status disappears.
+const pausedButtons = new Map();
+const restorePausedButton = (button, saved) => {
+  button.removeAttribute('data-echo-streaming-paused');
+  saved.icon.remove();
+  for (const name of ['title', 'aria-label']) {
+    if (button.getAttribute(name) !== copy.play) continue;
+    if (saved[name] === null) button.removeAttribute(name);
+    else button.setAttribute(name, saved[name]);
+  }
+  pausedButtons.delete(button);
+};
+const syncNativePlaybackButtons = (paused) => {
+  for (const [button, saved] of pausedButtons) {
+    if (!paused || !button.isConnected) restorePausedButton(button, saved);
+  }
+  if (!paused) return;
+  for (const button of document.querySelectorAll('.play-button, .lyrics-page button')) {
+    if (button.closest('.echo-external-mod-page')) continue;
+    if (!button.classList.contains('play-button') && !['播放', '暂停', '暫停', 'Play', 'Pause'].includes(button.getAttribute('title') || button.getAttribute('aria-label'))) continue;
+    if (!pausedButtons.has(button)) {
+      const icon = make('span', 'echo-streaming-paused-icon');
+      icon.setAttribute('aria-hidden', 'true');
+      icon.append(makeIcon('play', 20));
+      pausedButtons.set(button, { title: button.getAttribute('title'), 'aria-label': button.getAttribute('aria-label'), icon });
+    }
+    const saved = pausedButtons.get(button);
+    if (!button.contains(saved.icon)) button.append(saved.icon);
+    button.setAttribute('data-echo-streaming-paused', 'true');
+    button.setAttribute('title', copy.play);
+    button.setAttribute('aria-label', copy.play);
+  }
+};
+let playbackStatusPending = false;
+let playbackStatusTimeout = 0;
+const refreshPlaybackStatus = async () => {
+  if (packageDisposed || playbackStatusPending) return;
+  const current = findPlaybackQueue()?.currentTrack;
+  if (current?.mediaType !== 'streaming') {
+    state.playbackState = 'paused';
+    state.playbackTrackId = '';
+    syncNativePlaybackButtons(false);
+    if (state.currentStableKey) { state.currentStableKey = ''; if (pageRoot && !disposed) render(); }
+    return;
+  }
+  playbackStatusPending = true;
+  let status = null;
+  try {
+    status = await Promise.race([
+      playbackApi()?.getStatus?.(),
+      new Promise((resolve) => { playbackStatusTimeout = window.setTimeout(() => resolve(null), 1500); }),
+    ]);
+  } catch {}
+  finally { window.clearTimeout(playbackStatusTimeout); playbackStatusTimeout = 0; playbackStatusPending = false; }
+  if (packageDisposed || String(findPlaybackQueue()?.currentTrack?.id) !== String(current.id)) return;
+  const valid = String(status?.currentTrackId || '') === String(current.id) && ['playing', 'loading', 'paused', 'stopped'].includes(status?.state);
+  state.playbackState = valid ? status.state : 'paused';
+  state.playbackTrackId = String(current.id);
+  syncNativePlaybackButtons(!valid || ['paused', 'stopped'].includes(status.state));
+  const key = playCurrentStableKey();
+  if (key !== state.currentStableKey) {
+    state.currentStableKey = key;
+    if (pageRoot && !disposed) render();
+  }
+};
+const onPausedPlaybackClick = (event) => {
+  const button = event.target?.closest?.('[data-echo-streaming-paused]');
+  if (!button || findPlaybackQueue()?.currentTrack?.mediaType !== 'streaming' || !playbackApi()?.play) return;
+  event.preventDefault();
+  event.stopImmediatePropagation();
+  void (async () => { await playbackApi().play(); await refreshPlaybackStatus(); })().catch(reportError);
+};
 const loadModStylesheet = async (assetName, styleId, appendCss = '') => {
   try {
     const url = typeof external.assetUrl === 'function'
@@ -627,7 +707,7 @@ const indexDownloadJobs = (jobs) => { state.downloadJobIdsByTrackKey = Object.fr
 const notifyDownloadJob = (job) => { if (!job || !['completed', 'failed'].includes(job.status) || state.notifiedDownloadStatuses[job.id] === job.status) return; state.notifiedDownloadStatuses[job.id] = job.status; showChromeNotice(job.status === 'completed' ? (chinese ? `下载完成：${job.title || ''}` : `Download completed: ${job.title || ''}`) : (chinese ? `下载失败：${job.title || ''}${job.error ? ` - ${job.error}` : ''}` : `Download failed: ${job.title || ''}${job.error ? ` - ${job.error}` : ''}`)); };
 const appendCover = (parent, source, key, avatar = false) => { const cover = make('div', `streaming-cover${avatar ? ' streaming-cover--avatar' : ''}`); const src = source || defaultCover; cover.dataset.empty = String(src === defaultCover); const image = document.createElement('img'); image.src = state.failedCoverUrls[key] === src ? defaultCover : src; image.alt = ''; image.decoding = 'async'; image.loading = 'lazy'; image.width = 56; image.height = 56; image.addEventListener('error', () => { if (src !== defaultCover) { state.failedCoverUrls[key] = src; persistMemory(); image.src = defaultCover; cover.dataset.empty = 'true'; } }); cover.append(image); parent.append(cover); return cover; };
 
-const appendTrackCredits = (parent, track) => { const credits = make('span', 'streaming-credit-links'); const artists = streamTrackArtists(track); if (artists.length) artists.forEach((artist, index) => { const part = make('span', 'streaming-credit-part'); if (index) part.append(make('span', 'streaming-credit-separator', ', ')); const link = make('button', 'streaming-inline-link', artist.name || artist.providerArtistId || 'Unknown Artist'); link.type = 'button'; link.addEventListener('click', (event) => { event.stopPropagation(); openArtist({ id: artist.id, provider: artist.provider, providerArtistId: artist.providerArtistId, name: artist.name, avatarUrl: null, coverUrl: null }); }); part.append(link); credits.append(part); }); else credits.append(make('span', '', track.artist || 'Unknown Artist')); credits.append(make('span', 'streaming-credit-separator', ' / ')); if (track.albumId) { const link = make('button', 'streaming-inline-link', track.album || ''); link.type = 'button'; link.addEventListener('click', (event) => { event.stopPropagation(); openAlbum({ id: `streaming:${track.provider}:album:${track.albumId}`, provider: track.provider, providerAlbumId: track.albumId, title: track.album, artist: track.albumArtist || track.artist, artists: track.artists, coverUrl: track.coverUrl, coverThumb: track.coverThumb, releaseDate: null, trackCount: null }); }); credits.append(link); } else credits.append(make('span', '', track.album || '')); parent.append(credits); };
+const appendTrackCredits = (parent, track) => { const credits = make('span', 'streaming-credit-links'); const artists = streamTrackArtists(track); if (artists.length) artists.forEach((artist, index) => { const part = make('span', 'streaming-credit-part'); if (index) part.append(make('span', 'streaming-credit-separator', ', ')); const link = make('button', 'streaming-inline-link streaming-track-artist', artist.name || artist.providerArtistId || 'Unknown Artist'); link.type = 'button'; link.addEventListener('click', (event) => { event.stopPropagation(); openArtist({ id: artist.id, provider: artist.provider, providerArtistId: artist.providerArtistId, name: artist.name, avatarUrl: null, coverUrl: null }); }); part.append(link); credits.append(part); }); else credits.append(make('span', '', track.artist || 'Unknown Artist')); credits.append(make('span', 'streaming-credit-separator', ' / ')); if (track.albumId) { const link = make('button', 'streaming-inline-link streaming-track-album', track.album || ''); link.type = 'button'; link.addEventListener('click', (event) => { event.stopPropagation(); openAlbum({ id: `streaming:${track.provider}:album:${track.albumId}`, provider: track.provider, providerAlbumId: track.albumId, title: track.album, artist: track.albumArtist || track.artist, artists: track.artists, coverUrl: track.coverUrl, coverThumb: track.coverThumb, releaseDate: null, trackCount: null }); }); credits.append(link); } else credits.append(make('span', '', track.album || '')); parent.append(credits); };
 const downloadJobFor = (track) => { const id = state.downloadJobIdsByTrackKey[trackKey(track)]; return id ? state.downloadJobs.find((job) => job.id === id) || null : null; };
 const appendDownloadStatus = (parent, job) => { if (!job) return; const progress = clamp(job.progress, 0, 100); const labels = { queued: '排队中', probing: '解析链接', downloading: '下载中', extracting_audio: '提取音频', importing: '导入曲库', binding_mv: '绑定 MV', completed: '下载成功', failed: '下载失败', cancelled: '已取消' }; const box = make('div', 'streaming-download-progress'); box.dataset.status = job.status; const track = make('div', 'streaming-download-progress-track'); track.setAttribute('role', 'progressbar'); track.setAttribute('aria-valuemin', '0'); track.setAttribute('aria-valuemax', '100'); track.setAttribute('aria-valuenow', String(Math.round(progress))); const fill = make('span'); fill.style.width = `${progress}%`; track.append(fill); box.append(track, make('small', '', `${labels[job.status] || job.status} · ${Math.round(progress)}%`)); if (job.status === 'failed' && job.error) box.append(make('small', '', job.error)); parent.append(box); };
 let dismissStreamMenu = null;
@@ -741,7 +821,7 @@ const appendTrackRow = (parent, track, options = {}) => {
     playButton.addEventListener('blur', cancelPlaybackPrepare);
   }
   actions.append(playButton);
-  actions.append(actionButton(state.queuedTrackKey === key ? copy.queued : copy.queue, state.queuedTrackKey === key ? 'check' : 'list', () => handleAddToQueue(track), { iconOnly: true, title: copy.queue, ariaLabel: copy.queue, disabled: track.playable === false, className: 'streaming-icon-button' }));
+  actions.append(actionButton(state.queuedTrackKey === key ? copy.queued : copy.queue, state.queuedTrackKey === key ? 'check' : 'listPlus', () => handleAddToQueue(track), { iconOnly: true, title: copy.queue, ariaLabel: copy.queue, disabled: track.playable === false, className: 'streaming-icon-button' }));
   if (favoriteProviders.has(track.provider)) {
     const fav = state.favoriteTrackIds[favoriteKey(track)] === true;
     actions.append(actionButton(fav ? copy.unfavorite : copy.favorite, 'heart', () => handleToggleFavorite(track), { iconOnly: true, title: fav ? copy.unfavorite : copy.favorite, ariaLabel: fav ? copy.unfavorite : copy.favorite, active: fav, disabled: state.favoriteTrackKey === key, className: 'streaming-icon-button' }));
@@ -781,6 +861,7 @@ const appendAccountPlaylistRow = (parent, playlist) => {
   const id = String(playlist.providerPlaylistId || '').trim();
   const ownership = playlist.ownership === 'created' ? copy.created : playlist.ownership === 'favorited' ? copy.favorited : copy.accountPlaylist;
   const row = make('div', 'streaming-account-playlist-row streaming-account-playlist-row--sync');
+  row.dataset.filterText = [playlist.title, playlist.name, playlist.creator, playlist.providerPlaylistId].filter(Boolean).join(' ').toLocaleLowerCase();
   row.dataset.active = String(playlistIdentity(state.selectedPlaylist) === playlistIdentity(playlist));
   row.dataset.syncing = String(Boolean(state.syncingAccountPlaylistIds[id]));
 
@@ -807,7 +888,7 @@ const appendAccountPlaylistRow = (parent, playlist) => {
   open.addEventListener('click', () => void openPlaylist(playlist).catch(reportError));
   open.addEventListener('contextmenu', (event) => openStreamMenu(event, [
     { label: copy.downloadPlaylistToMusic, hint: musicMenuHint(playlist.title || playlist.name || ''), icon: 'download', disabled: Boolean(state.musicPlaylistDownload), onSelect: () => openPlaylistDownloadDialog(playlist) },
-    { label: copy.syncSelected, hint: playlist.title || playlist.name || '', icon: 'list', disabled: Object.keys(state.syncingAccountPlaylistIds).length > 0, onSelect: () => requestAccountPlaylistSync([playlist]) },
+    { label: copy.syncSelected, hint: playlist.title || playlist.name || '', icon: 'sync', disabled: Object.keys(state.syncingAccountPlaylistIds).length > 0, onSelect: () => requestAccountPlaylistSync([playlist]) },
   ]));
 
   row.append(check, open);
@@ -906,7 +987,7 @@ const appendPlaylistTrackRow = (parent, track) => {
   const actions = make('div', 'track-actions');
   actions.addEventListener('click', (event) => event.stopPropagation());
   actions.append(actionButton(copy.play, 'play', () => handlePlay(track), { iconOnly: true, className: 'row-action', title: copy.play, disabled: track.playable === false }));
-  actions.append(actionButton(copy.queue, 'list', () => handleAddToQueue(track), { iconOnly: true, className: 'row-action', title: copy.queue, disabled: track.playable === false }));
+  actions.append(actionButton(copy.queue, 'listPlus', () => handleAddToQueue(track), { iconOnly: true, className: 'row-action', title: copy.queue, disabled: track.playable === false }));
   row.append(cover, main, make('span', 'track-duration', formatDuration(track.duration)), actions);
   parent.append(row);
 };
@@ -971,7 +1052,7 @@ const renderAlbumDetail = () => {
   page.append(section);
   return page;
 };
-const renderArtistDetail = () => { const artist = state.selectedArtistDetail || state.selectedArtist; const name = artistName(artist); const page = make('div', 'streaming-artist-page'); page.append(actionButton(copy.back, 'arrow', () => { state.selectedArtist = null; state.selectedArtistDetail = null; state.artistError = null; render(); }, { className: 'streaming-artist-back', title: copy.back })); const hero = make('section', 'streaming-artist-hero'); const avatar = make('div', 'streaming-artist-avatar'); const src = artist?.coverUrl || artist?.avatarUrl; avatar.dataset.cover = String(Boolean(src)); if (src) { const image = document.createElement('img'); image.src = src; image.alt = ''; image.width = 512; image.height = 512; avatar.append(image); } else avatar.append(make('span', '', name.slice(0, 1).toUpperCase())); hero.append(avatar); const body = make('div', 'streaming-artist-copy'); body.append(make('span', 'streaming-artist-kicker', copy.artistKicker), make('h1', '', name)); const meta = make('div', 'streaming-artist-meta'); meta.append(make('span', '', artist?.provider || state.provider), make('span', '', formatTrackCount(state.selectedArtistDetail?.topTracks?.length || 0)), make('span', '', `${state.selectedArtistDetail?.albums?.length || 0} ${copy.albums.toLowerCase()}`)); body.append(meta, make('p', '', `${copy.streaming} catalog from ${artist?.provider || state.provider}.`)); const actions = make('div', 'streaming-artist-actions'); const top = state.selectedArtistDetail?.topTracks || []; actions.append(actionButton(state.artistLoading ? copy.readingArtist : copy.playArtist, state.artistLoading ? 'refresh' : 'play', handlePlayArtist, { className: 'streaming-artist-primary-action', disabled: state.artistLoading || !top.some((track) => track.playable), title: copy.playArtist }), actionButton(copy.addToQueue, 'list', handleQueueArtist, { className: 'streaming-artist-secondary-action', disabled: !top.some((track) => track.playable), title: copy.addToQueue }), actionButton(state.musicPlaylistDownload ? copy.downloading : copy.downloadTopTracks, state.musicPlaylistDownload ? 'refresh' : 'download', handleDownloadArtist, { className: 'streaming-artist-secondary-action', disabled: state.artistLoading || !top.some((track) => canDownloadTrackToMusic(track)) || Boolean(state.musicPlaylistDownload), title: copy.downloadTopTracks })); body.append(actions); if (state.artistError) body.append(make('p', 'streaming-artist-error', state.artistError)); hero.append(body); const stats = make('div', 'streaming-artist-stats'); [[copy.source, artist?.provider || state.provider], [copy.tracks, top.length], [copy.albums, state.selectedArtistDetail?.albums?.length || 0]].forEach(([label, value]) => { const item = make('div'); item.append(make('span', '', label), make('strong', '', value)); stats.append(item); }); hero.append(stats); page.append(hero); const trackSection = make('section', 'streaming-artist-section'); const heading = make('div', 'streaming-artist-section-heading'); const headingCopy = make('div'); headingCopy.append(make('span', '', copy.topTracks), make('h2', '', copy.songs)); heading.append(headingCopy); trackSection.append(heading); if (state.artistLoading && !top.length) trackSection.append(make('div', 'streaming-state', chinese ? '正在读取艺人...' : 'Reading artist...')); else if (!state.artistLoading && !top.length && !state.artistError) trackSection.append(make('div', 'streaming-state', chinese ? '这个艺人没有可显示的歌曲。' : 'This artist has no tracks to display.')); const list = make('div', 'streaming-artist-track-list'); top.forEach((track) => appendTrackRow(list, track)); trackSection.append(list); page.append(trackSection); const albums = state.selectedArtistDetail?.albums || []; if (albums.length) { const albumSection = make('section', 'streaming-artist-section'); const albumHeading = make('div', 'streaming-artist-section-heading'); const albumHeadingCopy = make('div'); albumHeadingCopy.append(make('span', '', copy.albums), make('h2', '', copy.discography)); albumHeading.append(albumHeadingCopy); albumSection.append(albumHeading); const albumList = make('div', 'streaming-artist-album-list'); albums.forEach((item) => appendAlbumCard(albumList, item)); albumSection.append(albumList); page.append(albumSection); } return page; };
+const renderArtistDetail = () => { const artist = state.selectedArtistDetail || state.selectedArtist; const name = artistName(artist); const page = make('div', 'streaming-artist-page'); page.append(actionButton(copy.back, 'arrow', () => { state.selectedArtist = null; state.selectedArtistDetail = null; state.artistError = null; render(); }, { className: 'streaming-artist-back', title: copy.back })); const hero = make('section', 'streaming-artist-hero'); const avatar = make('div', 'streaming-artist-avatar'); const src = artist?.coverUrl || artist?.avatarUrl; avatar.dataset.cover = String(Boolean(src)); if (src) { const image = document.createElement('img'); image.src = src; image.alt = ''; image.width = 512; image.height = 512; avatar.append(image); } else avatar.append(make('span', '', name.slice(0, 1).toUpperCase())); hero.append(avatar); const body = make('div', 'streaming-artist-copy'); body.append(make('span', 'streaming-artist-kicker', copy.artistKicker), make('h1', '', name)); const meta = make('div', 'streaming-artist-meta'); meta.append(make('span', '', artist?.provider || state.provider), make('span', '', formatTrackCount(state.selectedArtistDetail?.topTracks?.length || 0)), make('span', '', `${state.selectedArtistDetail?.albums?.length || 0} ${copy.albums.toLowerCase()}`)); body.append(meta, make('p', '', `${copy.streaming} catalog from ${artist?.provider || state.provider}.`)); const actions = make('div', 'streaming-artist-actions'); const top = state.selectedArtistDetail?.topTracks || []; actions.append(actionButton(state.artistLoading ? copy.readingArtist : copy.playArtist, state.artistLoading ? 'refresh' : 'play', handlePlayArtist, { className: 'streaming-artist-primary-action', disabled: state.artistLoading || !top.some((track) => track.playable), title: copy.playArtist }), actionButton(copy.addToQueue, 'listPlus', handleQueueArtist, { className: 'streaming-artist-secondary-action', disabled: !top.some((track) => track.playable), title: copy.addToQueue }), actionButton(state.musicPlaylistDownload ? copy.downloading : copy.downloadTopTracks, state.musicPlaylistDownload ? 'refresh' : 'download', handleDownloadArtist, { className: 'streaming-artist-secondary-action', disabled: state.artistLoading || !top.some((track) => canDownloadTrackToMusic(track)) || Boolean(state.musicPlaylistDownload), title: copy.downloadTopTracks })); body.append(actions); if (state.artistError) body.append(make('p', 'streaming-artist-error', state.artistError)); hero.append(body); const stats = make('div', 'streaming-artist-stats'); [[copy.source, artist?.provider || state.provider], [copy.tracks, top.length], [copy.albums, state.selectedArtistDetail?.albums?.length || 0]].forEach(([label, value]) => { const item = make('div'); item.append(make('span', '', label), make('strong', '', value)); stats.append(item); }); hero.append(stats); page.append(hero); const trackSection = make('section', 'streaming-artist-section'); const heading = make('div', 'streaming-artist-section-heading'); const headingCopy = make('div'); headingCopy.append(make('span', '', copy.topTracks), make('h2', '', copy.songs)); heading.append(headingCopy); trackSection.append(heading); if (state.artistLoading && !top.length) trackSection.append(make('div', 'streaming-state', chinese ? '正在读取艺人...' : 'Reading artist...')); else if (!state.artistLoading && !top.length && !state.artistError) trackSection.append(make('div', 'streaming-state', chinese ? '这个艺人没有可显示的歌曲。' : 'This artist has no tracks to display.')); const list = make('div', 'streaming-artist-track-list'); top.forEach((track) => appendTrackRow(list, track)); trackSection.append(list); page.append(trackSection); const albums = state.selectedArtistDetail?.albums || []; if (albums.length) { const albumSection = make('section', 'streaming-artist-section'); const albumHeading = make('div', 'streaming-artist-section-heading'); const albumHeadingCopy = make('div'); albumHeadingCopy.append(make('span', '', copy.albums), make('h2', '', copy.discography)); albumHeading.append(albumHeadingCopy); albumSection.append(albumHeading); const albumList = make('div', 'streaming-artist-album-list'); albums.forEach((item) => appendAlbumCard(albumList, item)); albumSection.append(albumList); page.append(albumSection); } return page; };
 const renderPlaylistOverflow = (items) => {
   const wrap = make('div', 'playlist-menu-wrap');
   const menu = make('div', 'playlist-action-menu');
@@ -1029,7 +1110,7 @@ const renderPlaylistDetail = () => {
   ].filter(Boolean).join(' · ')));
   const actions = make('div', 'playlist-actions playlist-detail-primary-actions');
   actions.append(actionButton(state.playlistLoading ? copy.readingPlaylist : copy.playPlaylist, state.playlistLoading ? 'refresh' : 'play', handlePlayPlaylist, { iconOnly: true, className: 'tool-button', disabled: state.playlistLoading || !playable.length, title: copy.playPlaylist, ariaLabel: copy.playPlaylist }));
-  actions.append(actionButton(copy.addToQueue, 'list', handleQueuePlaylist, { iconOnly: true, className: 'tool-button', disabled: !playable.length, title: copy.addToQueue, ariaLabel: copy.addToQueue }));
+  actions.append(actionButton(copy.addToQueue, 'listPlus', handleQueuePlaylist, { iconOnly: true, className: 'tool-button', disabled: !playable.length, title: copy.addToQueue, ariaLabel: copy.addToQueue }));
   const downloadable = tracks.filter((track) => canDownloadTrackToMusic(track)).length;
   const extras = [
     {
@@ -1076,6 +1157,38 @@ const renderPlaylistDetail = () => {
   return panel;
 };
 
+let livePlaylistFilterInput = null;
+let playlistFilterComposing = false;
+const applyPlaylistFilter = (list, empty) => {
+  const query = state.playlistFilter.trim().toLocaleLowerCase();
+  let visible = 0;
+  for (const row of list.children) {
+    row.hidden = !String(row.dataset.filterText || '').includes(query);
+    if (!row.hidden) visible += 1;
+  }
+  empty.hidden = visible > 0;
+};
+const ensurePlaylistFilterInput = () => {
+  if (livePlaylistFilterInput) return livePlaylistFilterInput;
+  const input = document.createElement('input');
+  input.type = 'search';
+  input.placeholder = accountText('筛选我的歌单', 'Filter my playlists');
+  input.setAttribute('aria-label', input.placeholder);
+  input.value = state.playlistFilter;
+  input.addEventListener('compositionstart', () => { playlistFilterComposing = true; });
+  input.addEventListener('compositionend', () => {
+    playlistFilterComposing = false;
+    if (searchRenderPending) { searchRenderPending = false; render(); }
+  });
+  input.addEventListener('input', () => {
+    state.playlistFilter = input.value;
+    const list = pageRoot?.querySelector('[data-account-playlist-filter-list]');
+    const empty = pageRoot?.querySelector('[data-account-playlist-filter-empty]');
+    if (list && empty) applyPlaylistFilter(list, empty);
+  });
+  livePlaylistFilterInput = input;
+  return input;
+};
 const renderPlaylistPanel = (playlists) => {
   const page = make('div', 'streaming-playlist-workspace');
   const sidebar = make('aside', 'playlist-sidebar');
@@ -1086,24 +1199,29 @@ const renderPlaylistPanel = (playlists) => {
   input.value = state.playlistUrl;
   input.placeholder = copy.playlistPlaceholder;
   input.disabled = Boolean(state.importingPlaylistKey);
-  input.addEventListener('input', () => { state.playlistUrl = input.value; });
+  input.addEventListener('input', () => { state.playlistUrl = input.value; add.disabled = !input.value.trim() || Boolean(state.importingPlaylistKey); });
   label.append(input);
   form.append(label);
-  form.append(actionButton(copy.add, state.importingPlaylistKey ? 'refresh' : 'list', () => handleImportPlaylist(), {
+  const add = actionButton(copy.add, state.importingPlaylistKey ? 'refresh' : 'plus', () => handleImportPlaylist(), {
     iconOnly: true, className: 'tool-button', disabled: !state.playlistUrl.trim() || Boolean(state.importingPlaylistKey), title: copy.add,
-  }));
-  form.append(actionButton(chinese ? '修复删除' : 'Fix delete', 'refresh', () => fixSyncedPlaylistKinds(true), {
-    iconOnly: true, className: 'tool-button', title: chinese ? '把同步歌单修复为可删除的本地歌单' : 'Make synced playlists deletable',
-  }));
+  });
+  form.append(add);
   form.addEventListener('submit', (event) => { event.preventDefault(); void handleImportPlaylist().catch(reportError); });
   sidebar.append(form);
+  if (state.query) {
+    sidebar.append(make('h3', 'streaming-playlist-search-heading', accountText('歌单搜索结果', 'Playlist search results')));
+    const list = make('div', 'streaming-account-playlist-list streaming-playlist-search-results');
+    playlists.forEach((item) => appendPlaylistCard(list, item));
+    if (!playlists.length) list.append(make('div', 'streaming-results-empty', state.loading ? copy.searchingEllipsis : state.error || copy.notFoundPlaylist));
+    sidebar.append(list);
+  }
   const stale = typeof streamApi()?.listAccountPlaylists !== 'function' && typeof invokeMain !== 'function';
   const syncBusy = Object.keys(state.syncingAccountPlaylistIds).length > 0;
   const accountTools = [
     actionButton(copy.refresh, 'refresh', () => state.accountPanelOpen ? loadAccountPlaylists(state.accountPlaylistProvider) : openAccountPlaylistSync(), {
       iconOnly: true, className: 'tool-button', disabled: stale || state.loadingAccountPlaylists || syncBusy, title: copy.refresh,
     }),
-    actionButton(copy.syncAll, 'list', () => void syncAllAccountPlaylists().catch(reportError), {
+    actionButton(copy.syncAll, 'sync', () => void syncAllAccountPlaylists().catch(reportError), {
       iconOnly: true, className: 'tool-button', disabled: stale || state.loadingAccountPlaylists || syncBusy, title: copy.syncAll,
     }),
   ];
@@ -1129,6 +1247,9 @@ const renderPlaylistPanel = (playlists) => {
       tabs.append(tab);
     });
     body.append(tabs);
+    const filter = make('label', 'search-box streaming-playlist-filter');
+    filter.append(makeIcon('search', 16), ensurePlaylistFilterInput());
+    body.append(filter);
     if (!state.accountPlaylists.length) {
       body.append(make('div', 'streaming-results-empty', state.loadingAccountPlaylists ? copy.reading : copy.noPlaylists));
       return;
@@ -1145,31 +1266,32 @@ const renderPlaylistPanel = (playlists) => {
       }
       render();
     }, { className: 'streaming-text-button', disabled: syncBusy }));
-    toolbar.append(actionButton(syncBusy ? copy.syncing : copy.syncSelected, 'list', () => {
+    toolbar.append(actionButton(syncBusy ? copy.syncing : copy.syncSelected, 'sync', () => {
       const items = state.accountPlaylists.filter((item) => state.selectedAccountPlaylistIds[item.providerPlaylistId] === true);
       requestAccountPlaylistSync(items);
     }, { className: 'streaming-text-button', disabled: syncBusy || selectedCount === 0 }));
-    toolbar.append(actionButton(syncBusy ? copy.syncing : copy.syncAll, 'list', () => void syncAllAccountPlaylists().catch(reportError), {
+    toolbar.append(actionButton(syncBusy ? copy.syncing : copy.syncAll, 'sync', () => void syncAllAccountPlaylists().catch(reportError), {
       className: 'streaming-text-button', disabled: syncBusy || state.loadingAccountPlaylists,
     }));
     body.append(toolbar);
     const list = make('div', 'streaming-account-playlist-list');
+    list.setAttribute('data-account-playlist-filter-list', 'true');
     state.accountPlaylists.forEach((item) => appendAccountPlaylistRow(list, item));
-    body.append(list);
+    const empty = make('div', 'streaming-results-empty', copy.notFoundPlaylist);
+    empty.setAttribute('data-account-playlist-filter-empty', 'true');
+    applyPlaylistFilter(list, empty);
+    body.append(list, empty);
   }));
   const daily = renderDailyPlaylistPanel();
   if (daily) sidebar.append(daily);
-  if (playlists.length) {
-    const list = make('div', 'streaming-account-playlist-list');
-    playlists.forEach((item) => appendPlaylistCard(list, item));
-    sidebar.append(list);
-  }
   page.append(sidebar, renderPlaylistDetail());
   return page;
 };
 
 const resetSearchInput = () => {
   liveSearchInput = null;
+  livePlaylistFilterInput = null;
+  playlistFilterComposing = false;
   searchComposing = false;
   searchRenderPending = false;
   searchCompositionEndedAt = 0;
@@ -1179,7 +1301,7 @@ const ensureSearchInput = () => {
   if (liveSearchInput) return liveSearchInput;
   const searchInput = document.createElement('input');
   searchInput.type = 'text';
-  searchInput.placeholder = copy.searchPlaceholder;
+  searchInput.placeholder = state.activeTab === 'playlist' ? accountText('搜索在线歌单', 'Search online playlists') : copy.searchPlaceholder;
   searchInput.value = state.input;
   searchInput.autocomplete = 'off';
   searchInput.spellcheck = false;
@@ -1297,7 +1419,7 @@ const renderMain = () => {
   const searchLabel = make('label', 'search-box streaming-search-box');
   searchLabel.append(makeIcon('search', 19));
   const searchInput = ensureSearchInput();
-  searchInput.placeholder = copy.searchPlaceholder;
+  searchInput.placeholder = state.activeTab === 'playlist' ? accountText('搜索在线歌单', 'Search online playlists') : copy.searchPlaceholder;
   if (document.activeElement !== searchInput && !searchComposing) searchInput.value = state.input;
   searchLabel.append(searchInput);
   command.append(searchLabel);
@@ -1388,7 +1510,7 @@ const renderMain = () => {
     shell.append(list);
   }
   workspace.append(shell);
-  if (state.activeTab !== 'playlist' && state.result?.hasMore) workspace.append(actionButton(state.loading ? copy.loadingMore : copy.loadMore, null, () => runSearch((state.result.page || 1) + 1, 'append'), { className: 'streaming-load-more', disabled: state.loading }));
+  if (state.result?.hasMore) workspace.append(actionButton(state.loading ? copy.loadingMore : copy.loadMore, null, () => runSearch((state.result.page || 1) + 1, 'append'), { className: 'streaming-load-more', disabled: state.loading }));
   page.append(workspace);
   if (state.noticeOpen) page.append(renderNoticeModal());
   return page;
@@ -1403,16 +1525,18 @@ const renderAccountEntry = () => {
 };
 const render = () => {
   if (!pageRoot || disposed) return;
-  if (searchComposing) {
+  if (searchComposing || playlistFilterComposing) {
     searchRenderPending = true;
     return;
   }
   persistMemory();
   const search = liveSearchInput && pageRoot.contains(liveSearchInput) ? liveSearchInput : pageRoot.querySelector?.('.streaming-search-box input');
   const keepSearch = Boolean(search && document.activeElement === search);
+  const keepFilter = document.activeElement === livePlaylistFilterInput;
   pageRoot.replaceChildren(state.ready ? (state.selectedAlbum ? renderAlbumDetail() : state.selectedArtist ? renderArtistDetail() : state.accepted ? renderMain() : renderGate()) : make('div', 'streaming-page streaming-hub', make('div', 'streaming-results-empty', copy.loading)));
   renderAccountEntry();
   attachLyricsActions();
+  if (keepFilter && livePlaylistFilterInput && pageRoot.contains(livePlaylistFilterInput)) livePlaylistFilterInput.focus({ preventScroll: true });
   if (!keepSearch) return;
   const next = liveSearchInput && pageRoot.contains(liveSearchInput) ? liveSearchInput : pageRoot.querySelector('.streaming-search-box input');
   if (next && document.activeElement !== next) next.focus({ preventScroll: true });
@@ -2884,7 +3008,7 @@ const appendDailyPlaylistRow = (parent, playlist) => {
   row.addEventListener('click', () => void openPlaylist(mapped).catch(reportError));
   row.addEventListener('contextmenu', (event) => openStreamMenu(event, [
     { label: copy.dailyRefreshOne, icon: 'refresh', disabled: state.refreshingDaily, onSelect: () => refreshDailyPlaylists([playlist]) },
-    { label: copy.add, icon: 'list', disabled: Boolean(state.syncingDailyKeys[dailyPlaylistKey(playlist)]), onSelect: () => syncDailyPlaylists([playlist]) },
+    { label: copy.add, icon: 'plus', disabled: Boolean(state.syncingDailyKeys[dailyPlaylistKey(playlist)]), onSelect: () => syncDailyPlaylists([playlist]) },
     { label: copy.downloadPlaylistToMusic, hint: musicMenuHint(playlist.title || ''), icon: 'download', disabled: Boolean(state.musicPlaylistDownload), onSelect: () => openPlaylistDownloadDialog(asStreamingDailyPlaylist(playlist)) },
   ]));
   parent.append(row);
@@ -4678,11 +4802,14 @@ const onUnavailableStreamingPlaylistClick = (event) => {
 document.addEventListener('click', onUnavailableStreamingPlaylistClick, true);
 // Main-process download progress arrives as echo-native broadcasts.
 window.addEventListener('echo-native', onNativeBroadcast);
+document.addEventListener('click', onPausedPlaybackClick, true);
+const playbackStatusTimer = window.setInterval(() => void refreshPlaybackStatus(), 750);
+void refreshPlaybackStatus();
 const installListeners = () => { if (downloadApi()?.onJobsUpdated) downloadUnsubscribe = downloadApi().onJobsUpdated((jobs) => { state.downloadJobs = Array.isArray(jobs) ? jobs : []; indexDownloadJobs(state.downloadJobs); state.downloadJobs.forEach(notifyDownloadJob); render(); }); bindAccountStatuses(); void invokeMain('target', {}).then((result) => { if (result?.directory) state.musicTargetBase = String(result.directory); }).catch(() => undefined); statusTimer = window.setInterval(() => { if (disposed) return; const key = playCurrentStableKey(); if (key !== state.currentStableKey) { state.currentStableKey = key; void similarOnTrackChange(); render(); } }, 1000); };
 
 const stopAccountQrPolling = () => { window.clearTimeout(accountQrTimer); accountQrTimer = 0; state.accountQr = null; removeNeteaseQrBackdrop(); };
 const streamingSidebarOrder = Number(manifest.sidebarOrder) || 40;
-const disposeSidebar = external.sidebar.register({ id: 'main', label: copy.streamingTitle || copy.streaming, icon: '♫', order: streamingSidebarOrder, render(root) { pageRoot = root; disposed = false; installListeners(); render(); void fixSyncedPlaylistKinds(); void loadInitial(); return () => { disposed = true; window.clearTimeout(searchTimer); window.clearInterval(statusTimer); resetSearchInput(); cancelPlaybackPrepare(); closeStreamMenu(); closePlaylistDownloadDialog(); accountUnsubscribe?.(); downloadUnsubscribe?.(); accountUnsubscribe = null; downloadUnsubscribe = null; pageRoot = null; }; } });
+const disposeSidebar = external.sidebar.register({ id: 'main', label: copy.streamingTitle || copy.streaming, icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18V5l10-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="16" cy="16" r="3"/></svg>', order: streamingSidebarOrder, render(root) { pageRoot = root; disposed = false; installListeners(); render(); void fixSyncedPlaylistKinds(); void loadInitial(); return () => { disposed = true; window.clearTimeout(searchTimer); window.clearInterval(statusTimer); resetSearchInput(); cancelPlaybackPrepare(); closeStreamMenu(); closePlaylistDownloadDialog(); accountUnsubscribe?.(); downloadUnsubscribe?.(); accountUnsubscribe = null; downloadUnsubscribe = null; pageRoot = null; }; } });
 accountsSidebarUnsubscribe = external.sidebar.register({
   id: 'accounts',
   label: accountText('流媒体账号', 'Streaming accounts'),
@@ -4705,4 +4832,4 @@ accountsSidebarUnsubscribe = external.sidebar.register({
     };
   },
 });
-return () => { disposed = true; packageDisposed = true; window.clearTimeout(searchTimer); window.clearInterval(statusTimer); window.clearInterval(dailyRefreshTimer); window.clearTimeout(dailyRefreshWarmupTimer); document.removeEventListener('click', onUnavailableStreamingPlaylistClick, true); window.removeEventListener('echo-native', onNativeBroadcast); resetSearchInput(); cancelPlaybackPrepare(); stopAccountQrPolling(); closeAccountDialog(); closeStreamMenu(); closePlaylistDownloadDialog(); accountUnsubscribe?.(); downloadUnsubscribe?.(); playlistPageUnsubscribe?.(); likedSourceUnsubscribe?.(); artistStreamingAlbumsUnsubscribe?.(); document.querySelectorAll('.settings-qr-login-backdrop[data-echo-streaming-qr]').forEach((node) => node.remove()); document.getElementById('echo-community-streaming-spatial')?.remove(); document.getElementById('echo-artist-streaming-albums-style')?.remove(); document.querySelectorAll('[data-echo-artist-streaming-albums], [data-echo-artist-streaming-album-detail-panel]').forEach((node) => node.remove()); disposeSidebar?.(); accountsSidebarUnsubscribe?.(); qobuzSidebarUnsubscribe?.(); };
+return () => { disposed = true; packageDisposed = true; window.clearInterval(playbackStatusTimer); window.clearTimeout(playbackStatusTimeout); document.removeEventListener('click', onPausedPlaybackClick, true); syncNativePlaybackButtons(false); document.getElementById('streaming-recent-del-style')?.remove(); window.clearTimeout(searchTimer); window.clearInterval(statusTimer); window.clearInterval(dailyRefreshTimer); window.clearTimeout(dailyRefreshWarmupTimer); document.removeEventListener('click', onUnavailableStreamingPlaylistClick, true); window.removeEventListener('echo-native', onNativeBroadcast); resetSearchInput(); cancelPlaybackPrepare(); stopAccountQrPolling(); closeAccountDialog(); closeStreamMenu(); closePlaylistDownloadDialog(); accountUnsubscribe?.(); downloadUnsubscribe?.(); playlistPageUnsubscribe?.(); likedSourceUnsubscribe?.(); artistStreamingAlbumsUnsubscribe?.(); document.querySelectorAll('.settings-qr-login-backdrop[data-echo-streaming-qr]').forEach((node) => node.remove()); document.getElementById('echo-community-streaming-spatial')?.remove(); document.getElementById('echo-artist-streaming-albums-style')?.remove(); document.querySelectorAll('[data-echo-artist-streaming-albums], [data-echo-artist-streaming-album-detail-panel]').forEach((node) => node.remove()); disposeSidebar?.(); accountsSidebarUnsubscribe?.(); qobuzSidebarUnsubscribe?.(); };

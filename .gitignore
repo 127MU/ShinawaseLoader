@@ -18,6 +18,8 @@ Packages/template-self-test.echomod
 /backup.zip
 /shinawaseloader-*-sourcecode.zip
 /dev-preview/
+/ShinawaseManager.exe
+ShinawaseLoader/ShinawaseManager.exe*
 /.tmp-asar/
 /_ref-ECHODev/
 /_patch-*.mjs

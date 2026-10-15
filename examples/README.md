@@ -4,32 +4,28 @@ Official sample packages. Source folders are not copied by `setup-modloader.bat`
 
 ## Preinstall (installer optional packages)
 
-Only these two appear in the setup optional-package list (checked by default):
+All three appear in the setup optional-package list (checked by default). The Windows Manager's options page also offers **Install all**:
 
 | Name | Folder | Package |
 | --- | --- | --- |
 | ECHO Streaming | [ECHO-Streaming](ECHO-Streaming) | `examples/packages/ECHO-Streaming.echomod` |
 | ECHO MV | [ECHO-MV](ECHO-MV) | `examples/packages/ECHO-MV.echomod` |
+| ECHO Lyrics Match Whitebox | [ECHO-LyricsMatchWhitebox](ECHO-LyricsMatchWhitebox) | `examples/packages/ECHO-LyricsMatchWhitebox.echomod` |
 
 Rebuild from the repository root:
 
 ```powershell
 .\pack-mod.bat .\examples\ECHO-Streaming\echomod .\examples\packages\ECHO-Streaming.echomod --zip
 .\pack-mod.bat .\examples\ECHO-MV\echomod .\examples\packages\ECHO-MV.echomod --zip
+.\pack-mod.bat .\examples\ECHO-LyricsMatchWhitebox\echomod .\examples\packages\ECHO-LyricsMatchWhitebox.echomod --zip
 ```
 
 Every installer example ships a `config.schema.json` fallback form; most also include a custom `configUi` page (loader >= 1.6.0).
 
-## Extra packages
-
-| Name | Folder | Package |
-| --- | --- | --- |
-| ECHO Lyrics Match Whitebox | [ECHO-LyricsMatchWhitebox](ECHO-LyricsMatchWhitebox) | `examples/packages/ECHO-LyricsMatchWhitebox.echomod` |
-
-Lyrics matching uses the official titlebar **歌词设置** button → right-side drawer. Does **not** auto-pop a floating overlay on every play, and does **not** inject a circular corner icon. Not in the installer optional list; import the `.echomod` yourself.
+Lyrics matching uses the official titlebar **歌词设置** button → right-side drawer. It does **not** auto-pop a floating overlay on every play or inject a circular corner icon. Source filters show an explicit empty state until candidates arrive.
 
 ## Reference mods
 
 Other sample Mods live under [`reference/`](reference/) as archived implementations. They are **not** listed in the installer optional packages and are **not** imported by `setup-modloader`. Pack and drop them yourself if you need them. See [`reference/README.md`](reference/README.md).
 
-Drop a built `.echomod` into the Steam stable game `Mods` folder (`D:\SteamLibrary\steamapps\common\ECHO\Mods`), or import it from the in-app Mods page. Runtime userData is `%APPDATA%\ECHO Steam`, not leftover `ECHO NEXT` / `ECHO`.
+Drop a built `.echomod` into the selected Steam game's `"<ECHO_ROOT>\Mods"` folder, or import it from the in-app Mods page. Runtime userData is `%APPDATA%\ECHO Steam`, not leftover `ECHO NEXT` / `ECHO`.
