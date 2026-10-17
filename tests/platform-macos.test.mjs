@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { join } from 'node:path';
 import test from 'node:test';
-import { discoverDarwinEchoExecutables, installMacLoader, resolveMacInstallRoot } from '../scripts/setup-modloader-macos.mjs';
+import { discoverDarwinEchoExecutables, discoverSteamEchoExecutables, installMacLoader, resolveMacInstallRoot } from '../scripts/setup-modloader-macos.mjs';
 import {
   echoUserDataDirectory,
   filterSteamCommandArgs,
@@ -148,6 +148,11 @@ test('darwin discovery prefers the Steam install and skips Playtest and modded c
       includeSystemRoots: false,
       bundleApps: [join(dist, 'ECHO.app')],
     });
+    assert.deepEqual(discoverSteamEchoExecutables({
+      home,
+      env: { ECHO_ROOT: dist },
+      bundleApps: [join(dist, 'ECHO.app')],
+    }), [stable]);
     assert.equal(found[0], stable);
     assert.equal(found.some((file) => file.includes('modded-runtime')), false);
     assert.equal(found.some((file) => file.includes('Playtest')), true);

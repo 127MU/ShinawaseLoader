@@ -22,6 +22,8 @@ Rebuild from the repository root:
 
 Every installer example ships a `config.schema.json` fallback form; most also include a custom `configUi` page (loader >= 1.6.0).
 
+ECHO Streaming 1.7.3 supports the current playlist overview, the independent Liked route, and the new player transport controls while retaining older sidebar layouts. Streaming likes have their own play-all and shuffle actions, independent of the local liked-track count. Artist album integration ignores hidden cached routes and inactive album tabs. Update the Loader together with the package and restart ECHO so the isolated runtime receives the playlist-track compatibility patch. These adapters have focused offline coverage under `ECHO-Streaming/dev/*compat.test.mjs`; real-client playback and provider requests require separate validation.
+
 Lyrics matching uses the official titlebar **歌词设置** button → right-side drawer. It does **not** auto-pop a floating overlay on every play or inject a circular corner icon. Source filters show an explicit empty state until candidates arrive.
 
 ## Reference mods

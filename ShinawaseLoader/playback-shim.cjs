@@ -101,7 +101,15 @@ const staleStatus = (code) => code === 404 || code === 403 || code === 410;
 const installProxy = () => {
   if (globalThis.__shinawaseMediaProxy) return globalThis.__shinawaseMediaProxy;
   const tokens = new Map();
+  const pruneTokens = () => {
+    const now = Date.now();
+    for (const [token, entry] of tokens) if (entry.expires <= now) tokens.delete(token);
+    while (tokens.size > 256) tokens.delete(tokens.keys().next().value);
+  };
+  const pruneTimer = setInterval(pruneTokens, 60_000);
+  pruneTimer.unref?.();
   const pipeUpstream = (req, res, entry, retried) => {
+    if (res.destroyed || res.writableEnded) return;
     let target;
     try { target = new URL(entry.url); } catch {
       res.statusCode = 502;
@@ -135,7 +143,12 @@ const installProxy = () => {
       if (!res.headersSent) res.statusCode = 502;
       res.end();
     });
-    req.on('close', () => upstream.destroy());
+    // Incoming GET completion does not mean the consumer has finished reading.
+    // A seek/skip closes the response: tear down its upstream immediately.
+    const cancel = () => upstream.destroy();
+    res.once('close', cancel);
+    upstream.once('close', () => res.removeListener('close', cancel));
+    upstream.setTimeout(30_000, () => upstream.destroy(new Error('streaming_proxy_timeout')));
     upstream.end();
   };
   const server = http.createServer((req, res) => {
@@ -151,8 +164,14 @@ const installProxy = () => {
     }
     pipeUpstream(req, res, entry, false);
   });
-  server.listen(0, '127.0.0.1');
+  server.once('close', () => { clearInterval(pruneTimer); tokens.clear(); });
+  const ready = new Promise((resolve, reject) => {
+    server.once('error', reject);
+    server.listen(0, '127.0.0.1', resolve);
+  });
+  ready.catch(() => { clearInterval(pruneTimer); });
   const api = {
+    ready,
     urlFor(source, item) {
       const token = randomBytes(12).toString('hex');
       tokens.set(token, {
@@ -161,6 +180,7 @@ const installProxy = () => {
         item: item || null,
         expires: Date.now() + 12 * 60 * 1000,
       });
+      pruneTokens();
       const addr = server.address();
       return `http://127.0.0.1:${addr.port}/${token}${extensionForSource(source, item)}`;
     },
@@ -231,8 +251,9 @@ const preserveOutputSettings = (raw) => {
   return { ...output };
 };
 
-const asLocalRequest = (raw, item, source) => {
+const asLocalRequest = async (raw, item, source) => {
   const proxy = installProxy();
+  await proxy.ready;
   const probe = buildStreamingProbe(item, source);
   // Fallback path when Steam still rejects non-m3u8 streaming: local HTTP
   // proxy + full probe/output so exclusive, ASIO, EQ, SRC, SDM, and dither
@@ -263,8 +284,9 @@ const asLocalRequest = (raw, item, source) => {
   };
 };
 
-const asResolvedSource = (item, source) => {
+const asResolvedSource = async (item, source) => {
   const proxy = installProxy();
+  await proxy.ready;
   const probe = buildStreamingProbe(item, source);
   return {
     filePath: proxy.urlFor(source, item),
@@ -291,7 +313,7 @@ const playStreamingViaShim = async (original, event, raw, item) => {
   } catch (error) {
     if (!steamStreamingBlocked(error)) throw error;
     const source = await resolvePlaybackRetry(item, raw?.forceRefresh);
-    return original(event, asLocalRequest(raw, item, source));
+    return original(event, await asLocalRequest(raw, item, source));
   }
 };
 
