@@ -1830,9 +1830,24 @@ const fetchImageOnce = async (url, headers) => {
   const timer = setTimeout(() => controller.abort(), 15_000);
   try {
     const response = await fetch(url, { headers, signal: controller.signal });
-    if (!response.ok) return null;
-    const data = Buffer.from(await response.arrayBuffer());
-    if (!data.length || data.length > maxCoverBytes) return null;
+    if (!response.ok || Number(response.headers.get('content-length')) > maxCoverBytes || !response.body) {
+      controller.abort();
+      return null;
+    }
+    const chunks = [];
+    let size = 0;
+    // Content-Length may be absent or describe compressed data: enforce the
+    // limit on bytes actually read, before allocating a combined cover buffer.
+    for await (const chunk of response.body) {
+      size += chunk.byteLength;
+      if (size > maxCoverBytes) {
+        controller.abort();
+        return null;
+      }
+      chunks.push(Buffer.from(chunk.buffer, chunk.byteOffset, chunk.byteLength));
+    }
+    if (!size) return null;
+    const data = Buffer.concat(chunks, size);
     const mimeType = data[0] === 0x89 && data[1] === 0x50 ? 'image/png'
       : data[0] === 0xff && data[1] === 0xd8 ? 'image/jpeg'
       : String(response.headers.get('content-type') || '').split(';')[0].trim().toLowerCase();

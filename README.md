@@ -118,16 +118,24 @@ Loader **不会取代** Steam 原版 `ECHO.exe` / `app.asar`。安装会在游�
 
 macOS 安装器只认包含 `ECHO.app` 的目录（Steam 一般是 `~/Library/Application Support/Steam/steamapps/common/ECHO`，本地构建是 `dist/mac-arm64`）。它不编译 `ECHO.modded.exe`，也不改 Windows 安装脚本。本机需要已有的 Node **22.23.2**。
 
-不传目录时，安装器会自己找：Steam `libraryfolders.vdf`、默认 Steam 库、`/Applications`、`~/Applications`、上次的 `selection.json`，以及 Spotlight 里标识为 `app.echo.steam` 的应用。Playtest 不会被自动选中。
+不传目录时，安装器只查找 Steam `libraryfolders.vdf` 中的资料库和默认 Steam 库里的正式版 ECHO，不列出本地开发构建、Spotlight 搜索结果或 Playtest。只找到一个正式版时直接选中，多个安装位置时才需要按编号选择。
 
 ```bash
 ./start-mac.command
 ```
 
-在 Finder 里双击 `start-mac.command` 效果相同：找到 `ECHO.app` 后安装并启动。第一次会把附带的 ECHO Streaming、ECHO MV 和 ECHO Lyrics Match Whitebox 导入并启用，侧栏里可以再开关。已经关掉的 Mod 不会被下次安装重新打开。已经知道目录时也可以指定：
+在 Finder 里双击 `start-mac.command` 效果相同：先打开终端菜单，不会自动安装或启动。菜单会显示当前 ECHO 目录、Loader 版本和启动入口状态，选 1 可以重新扫描 Steam 正式版；需要其他构建时，选 6 手动输入 / 拖入 `ECHO.app` 路径。
+
+可分别开关预装 Mod 和 streaming 依赖安装，再选择「安装 / 更新 Loader」；确认目标后输入 `y` 才会写入文件。默认会安装 streaming 依赖，并把附带的 ECHO Streaming、ECHO MV 和 ECHO Lyrics Match Whitebox 导入并启用，侧栏里可以再开关。已经关掉的 Mod 不会被下次安装重新打开。安装完成后返回菜单，选择「启动」才会启动 ECHO。安装前请先退出 ECHO。已经知道目录时也可以预选：
 
 ```bash
 ./setup-modloader.sh --echo "<ECHO_ROOT>"
+```
+
+自动化安装必须同时指定 `--yes --echo`；默认不启动，只有额外加 `--launch` 才会启动。`--no-packages` 跳过预装 Mod，`--no-deps` 跳过依赖下载，`--help` 查看帮助：
+
+```bash
+./setup-modloader.sh --yes --echo "<ECHO_ROOT>" --no-packages
 ```
 
 `<ECHO_ROOT>` 可以是内容目录、`ECHO.app`，或 `ECHO.app/Contents/MacOS/ECHO`。安装会在该目录旁写入 `ECHO.modded.command`、`ShinawaseLoader/`、`Mods/` 和 `Plugins/`。隔离运行时放在 `ShinawaseLoader/modded-runtime/`，是一份独立的 `ECHO.app` 副本。补丁只写在这份额外副本上，副本会单独重新签名，Steam 里的原始 `ECHO.app` 不会被修改。从 Steam 里直接点「开始游戏」开的是原版；要用 Mod，请双击 `ECHO.modded.command`，或把启动项设成：
@@ -162,7 +170,7 @@ Linux 安装器认包含 `ECHO` 可执行文件和 `resources/app.asar` 的目�
 
 调试、安全模式和附加启动器在 `ShinawaseLoader/` 下，扩展名是 `.sh`。Flatpak 或 Snap 版 Steam 看不到宿主机的 Node，所以安装器会把 Node 复制到 `ShinawaseLoader/node`（发行版自带、依赖共享库的 Node 复制后不能用，安装器会提示改用官方二进制）。userData 在 `~/.config/ECHO Steam`（遵循 `XDG_CONFIG_HOME`），Loader 自己的选择记录在 `~/.config/ShinawaseLoader/selection.json`。原生 host（`echo-native-host.node` / host-dll）仍只在 Windows 上构建，Linux 会跳过它，CDP 注入照常进行。
 
-与 Windows 安装器一样，Linux 安装器会在 `ShinawaseLoader/` 里跑一次 `npm install`，装上 streaming 桥要热加载的 `@neteasecloudmusicapienhanced/api`（缺它时网易云音源会退回已经 404 的裸接口）。来源依次是下载镜像的 `<base>/npm/` 和 `https://registry.npmmirror.com`，可用 `SHINAWASE_MIRRORS`（写 `none` 关闭镜像）与 `SHINAWASE_NPM_REGISTRY` 覆盖，或用 `--no-deps` 整个跳过；包内容仍由 `package-lock.json` 的 integrity 校验，镜像无法替换。装好且 lock 未变时不会重复下载，失败只提示不中断安装。macOS 安装器目前没有这一步，需要时手动 `npm --prefix "<游戏目录>/ShinawaseLoader" install`。
+与 Windows 安装器一样，Linux 安装器会在 `ShinawaseLoader/` 里跑一次 `npm install`，装上 streaming 桥要热加载的 `@neteasecloudmusicapienhanced/api`（缺它时网易云音源会退回已经 404 的裸接口）。来源依次是下载镜像的 `<base>/npm/` 和 `https://registry.npmmirror.com`，可用 `SHINAWASE_MIRRORS`（写 `none` 关闭镜像）与 `SHINAWASE_NPM_REGISTRY` 覆盖，或用 `--no-deps` 整个跳过；包内容仍由 `package-lock.json` 的 integrity 校验，镜像无法替换。装好且 lock 未变时不会重复下载，失败只提示不中断安装。macOS 安装器也已接入这一步，可在交互菜单里关闭，或传入 `--no-deps` 跳过。
 
 如果 ECHO 因 `chrome-sandbox` 不是 root 的 setuid 文件而启动失败（常见于 Ubuntu 24.04 一类限制了非特权用户命名空间的发行版），原版同样会遇到；可以在启动项里追加 `--no-sandbox`，Loader 会原样传给 ECHO。
 

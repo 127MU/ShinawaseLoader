@@ -84,6 +84,8 @@ state.dailyModuleOpen = stored.dailyModuleOpen && typeof stored.dailyModuleOpen 
   ? { daily: stored.dailyModuleOpen.daily !== false, radar: stored.dailyModuleOpen.radar === true, history: stored.dailyModuleOpen.history === true }
   : { daily: true, radar: false, history: false };
 state.accountSectionOpen = stored.accountSectionOpen === true;
+// Bootstrap data must not pin an old result/playlist snapshot after replacement.
+for (const key of Object.keys(stored)) delete stored[key];
 state.accountMessages = {};
 state.accountCookies = {};
 state.accountBrowsers = {};
@@ -599,7 +601,32 @@ const schedulePlaybackPrepare = (track) => {
 };
 const playCurrentStableKey = () => { const current = findPlaybackQueue()?.currentTrack; return current?.mediaType === 'streaming' && state.playbackState === 'playing' && state.playbackTrackId === String(current.id) ? String(current.stableKey || current.id || '') : ''; };
 const favoriteIdsFromSnapshot = (snapshot) => { const ids = {}; for (const items of Object.values(snapshot?.providers || {})) for (const item of items || []) ids[`${item.provider}:${item.providerTrackId}`] = true; for (const collection of snapshot?.collections || []) for (const item of collection.tracks || []) ids[`${item.provider}:${item.providerTrackId}`] = true; return ids; };
-const persistMemory = () => { try { external.settings?.set?.({ provider: state.provider, quality: state.quality, downloadQuality: state.downloadQuality, activeTab: state.activeTab, input: state.input, query: state.query, resultKey: state.result ? `${state.provider}:${state.activeTab}:${state.query.trim().toLocaleLowerCase()}` : null, result: state.result, failedCoverUrls: state.failedCoverUrls, scrollTop: state.scrollTop, recentSearches: state.recentSearches, dailyPlaylists: state.dailyPlaylists, dailyLastRefreshAt: state.dailyLastRefreshAt, dailySyncedKeys: state.dailySyncedKeys, autoRefreshDaily: state.autoRefreshDaily, autoSyncDaily: state.autoSyncDaily, dailySidebarCollapsed: state.dailySidebarCollapsed, dailySectionOpen: state.dailySectionOpen, dailyModuleOpen: state.dailyModuleOpen, accountSectionOpen: state.accountSectionOpen, similarAutoPlay: ncmUi.similarAutoPlay, similarCount: ncmUi.similarCount }); } catch {} };
+let scrollSaveTimer = 0;
+let lastSavedPreferences = '';
+let lastSavedResult = null;
+const persistMemory = () => {
+  window.clearTimeout(scrollSaveTimer);
+  scrollSaveTimer = 0;
+  try {
+    const preferences = { provider: state.provider, quality: state.quality, downloadQuality: state.downloadQuality, activeTab: state.activeTab, input: state.input, query: state.query, resultKey: state.result ? `${state.provider}:${state.activeTab}:${state.query.trim().toLocaleLowerCase()}` : null, failedCoverUrls: state.failedCoverUrls, scrollTop: state.scrollTop, recentSearches: state.recentSearches, dailyPlaylists: state.dailyPlaylists, dailyLastRefreshAt: state.dailyLastRefreshAt, dailySyncedKeys: state.dailySyncedKeys, autoRefreshDaily: state.autoRefreshDaily, autoSyncDaily: state.autoSyncDaily, dailySidebarCollapsed: state.dailySidebarCollapsed, dailySectionOpen: state.dailySectionOpen, dailyModuleOpen: state.dailyModuleOpen, accountSectionOpen: state.accountSectionOpen, similarAutoPlay: ncmUi.similarAutoPlay, similarCount: ncmUi.similarCount };
+    // Results are replaced by searches/pagination. Compare that reference so a
+    // UI-only render does not stringify the entire accumulated track list.
+    const signature = JSON.stringify(preferences);
+    if (signature === lastSavedPreferences && state.result === lastSavedResult) return;
+    external.settings?.set?.({ ...preferences, result: state.result });
+    lastSavedPreferences = signature;
+    lastSavedResult = state.result;
+  } catch {
+    lastSavedPreferences = '';
+    lastSavedResult = null;
+  }
+};
+const scheduleScrollSave = () => {
+  window.clearTimeout(scrollSaveTimer);
+  scrollSaveTimer = window.setTimeout(() => { scrollSaveTimer = 0; persistMemory(); }, 300);
+};
+const flushScrollSave = () => { if (scrollSaveTimer) persistMemory(); };
+window.addEventListener('pagehide', flushScrollSave);
 const rememberSearch = (query) => { const value = String(query || '').trim(); if (!value) return; state.recentSearches = [value, ...state.recentSearches.filter((item) => item !== value)].slice(0, 8); };
 const providerRailState = (provider) => accountAwareProviders.has(provider?.name) && provider.accountConnected !== true ? 'signedOut' : !provider?.enabled ? 'disabled' : accountAwareProviders.has(provider?.name) ? 'signedIn' : 'available';
 const providerRailStatus = (provider) => { const rail = providerRailState(provider); return rail === 'disabled' ? copy.disabled : rail === 'signedOut' ? copy.notLoggedIn : rail === 'signedIn' ? copy.loggedIn(provider.accountDisplayName || provider.displayName) : copy.available; };
@@ -621,9 +648,9 @@ const syncNativePlaybackButtons = (paused) => {
     if (!paused || !button.isConnected) restorePausedButton(button, saved);
   }
   if (!paused) return;
-  for (const button of document.querySelectorAll('.play-button, .lyrics-page button')) {
+  for (const button of document.querySelectorAll('.play-button, .player-primary-control, [data-workshop-icon="transport-play"], [data-workshop-icon="transport-pause"], .lyrics-page button')) {
     if (button.closest('.echo-external-mod-page')) continue;
-    if (!button.classList.contains('play-button') && !['播放', '暂停', '暫停', 'Play', 'Pause'].includes(button.getAttribute('title') || button.getAttribute('aria-label'))) continue;
+    if (!button.matches('.play-button, .player-primary-control, [data-workshop-icon="transport-play"], [data-workshop-icon="transport-pause"]') && !['播放', '暂停', '暫停', 'Play', 'Pause'].includes(button.getAttribute('title') || button.getAttribute('aria-label'))) continue;
     if (!pausedButtons.has(button)) {
       const icon = make('span', 'echo-streaming-paused-icon');
       icon.setAttribute('aria-hidden', 'true');
@@ -646,7 +673,7 @@ const refreshPlaybackStatus = async () => {
     state.playbackState = 'paused';
     state.playbackTrackId = '';
     syncNativePlaybackButtons(false);
-    if (state.currentStableKey) { state.currentStableKey = ''; if (pageRoot && !disposed) render(); }
+    if (state.currentStableKey) { state.currentStableKey = ''; syncPlaybackRows(); }
     return;
   }
   playbackStatusPending = true;
@@ -666,7 +693,7 @@ const refreshPlaybackStatus = async () => {
   const key = playCurrentStableKey();
   if (key !== state.currentStableKey) {
     state.currentStableKey = key;
-    if (pageRoot && !disposed) render();
+    syncPlaybackRows();
   }
 };
 const onPausedPlaybackClick = (event) => {
@@ -759,6 +786,33 @@ const openStreamMenu = (event, entries) => {
   });
   openCursorPanel(event, menu);
 };
+// Keep native find-in-page and keyboard navigation across the complete list.
+// Chromium can skip layout/paint offscreen and remember each row's measured size.
+const deferTrackRowLayout = (row, estimatedHeight = 60) => {
+  row.style.contentVisibility = 'auto';
+  row.style.containIntrinsicBlockSize = `auto ${estimatedHeight}px`;
+};
+const syncPlaybackRows = () => {
+  if (!pageRoot || disposed) return;
+  for (const row of pageRoot.querySelectorAll('[data-streaming-track-key]')) {
+    const playing = Boolean(state.currentStableKey && row.dataset.streamingTrackKey === state.currentStableKey);
+    if (row.dataset.playing === String(playing)) continue;
+    row.dataset.playing = String(playing);
+    const title = row.querySelector('.streaming-title-line, .track-title-row');
+    if (!title) continue;
+    if (playing) {
+      if (!title.querySelector('.playing-dot')) title.prepend(make('span', 'playing-dot'));
+      if (row.classList.contains('streaming-row') && !title.querySelector('[data-streaming-playing-label]')) {
+        const label = make('em', '', copy.playing);
+        label.setAttribute('data-streaming-playing-label', 'true');
+        title.append(label);
+      }
+    } else {
+      title.querySelector('.playing-dot')?.remove();
+      title.querySelector('[data-streaming-playing-label]')?.remove();
+    }
+  }
+};
 const appendTrackRow = (parent, track, options = {}) => {
   const key = trackKey(track);
   const current = state.currentStableKey === key || playCurrentStableKey() === key;
@@ -769,6 +823,8 @@ const appendTrackRow = (parent, track, options = {}) => {
   const currentProvider = state.providers.find((item) => item.name === (track.provider || state.provider));
   const row = make('article', 'streaming-row');
   row.dataset.playing = String(current);
+  row.dataset.streamingTrackKey = key;
+  deferTrackRowLayout(row);
   row.dataset.unavailable = String(track.playable === false);
   row.dataset.clickable = 'true';
   row.tabIndex = 0;
@@ -800,7 +856,11 @@ const appendTrackRow = (parent, track, options = {}) => {
   const titleLine = make('div', 'streaming-title-line');
   if (current) titleLine.append(make('span', 'playing-dot'));
   titleLine.append(make('strong', '', track.title || 'Untitled'));
-  if (current) titleLine.append(make('em', '', copy.playing));
+  if (current) {
+    const label = make('em', '', copy.playing);
+    label.setAttribute('data-streaming-playing-label', 'true');
+    titleLine.append(label);
+  }
   main.append(titleLine);
   appendTrackCredits(main, track);
   if (!spatial) main.append(make('small', '', track.playable === false ? (track.unavailableReason || copy.unavailable) : `${track.provider} · ${trackQualitySummary(track)}`));
@@ -912,6 +972,7 @@ const appendNativeCover = (parent, source, key, size = 320) => {
   image.alt = '';
   image.decoding = 'async';
   image.draggable = false;
+  image.loading = size <= 56 ? 'lazy' : 'eager';
   image.width = size;
   image.height = size;
   image.addEventListener('error', () => {
@@ -943,6 +1004,8 @@ const appendAlbumTrackRow = (parent, track, index) => {
   row.type = 'button';
   row.setAttribute('role', 'listitem');
   row.dataset.playing = String(current);
+  row.dataset.streamingTrackKey = key;
+  deferTrackRowLayout(row);
   row.dataset.unavailable = String(track.playable === false);
   bindDetailTrack(row, track);
   const number = make('span', 'album-track-number');
@@ -962,6 +1025,8 @@ const appendPlaylistTrackRow = (parent, track) => {
   const current = state.currentStableKey === key || playCurrentStableKey() === key;
   const row = make('div', 'track-row');
   row.dataset.playing = String(current);
+  row.dataset.streamingTrackKey = key;
+  deferTrackRowLayout(row);
   row.dataset.clickable = 'true';
   row.dataset.unavailable = String(track.playable === false);
   row.setAttribute('role', 'listitem');
@@ -1502,7 +1567,7 @@ const renderMain = () => {
     shell.append(list);
   } else {
     const list = make('div', 'streaming-results');
-    list.addEventListener('scroll', () => { state.scrollTop = list.scrollTop; persistMemory(); });
+    list.addEventListener('scroll', () => { state.scrollTop = list.scrollTop; scheduleScrollSave(); }, { passive: true });
     const spacer = make('div', 'streaming-virtual-spacer');
     (state.result?.tracks || []).forEach((track, index) => appendTrackRow(spacer, track, { spatial: true, index }));
     list.append(spacer);
@@ -1764,6 +1829,12 @@ const normalizeRichProbe = (entry) => {
   return sorted.length ? { qualities: sorted, details, failed: false } : null;
 };
 const qualityProbeCache = new Map();
+const cacheQualityProbe = (key, value) => {
+  if (packageDisposed) return;
+  qualityProbeCache.delete(key);
+  qualityProbeCache.set(key, value);
+  while (qualityProbeCache.size > 512) qualityProbeCache.delete(qualityProbeCache.keys().next().value);
+};
 // Resolved probe entry (never an in-flight promise), for synchronous renders.
 const readyProbeEntry = (key) => {
   const cached = qualityProbeCache.get(key);
@@ -1787,7 +1858,7 @@ const probeTrackQualitiesBatch = async (tracks, providers = batchProbeProviders)
       const results = response?.results && typeof response.results === 'object' ? response.results : {};
       for (const [providerTrackId, key] of group) {
         const normalized = normalizeRichProbe(results[providerTrackId]);
-        if (normalized && !qualityProbeCache.has(key)) qualityProbeCache.set(key, normalized);
+        if (normalized && !qualityProbeCache.has(key)) cacheQualityProbe(key, normalized);
       }
     } catch {}
   }));
@@ -1838,11 +1909,11 @@ const probeTrackQualities = async (track) => {
     }
     return { qualities: allQualitiesSorted(), failed: true, error: lastError };
   })();
-  qualityProbeCache.set(key, work);
+  cacheQualityProbe(key, work);
   const result = await work;
   // Cache successes only, so a transient failure can be retried later.
   if (result.failed) qualityProbeCache.delete(key);
-  else qualityProbeCache.set(key, result);
+  else cacheQualityProbe(key, result);
   return result;
 };
 // Localized quality summary for list rows: prefers probed truth (with real
@@ -2124,7 +2195,7 @@ const loadNeteasePlaylistTracksViaMain = async (playlist, fallbackName, options 
       playable: true,
     };
     const probe = normalizeRichProbe(item);
-    if (probe) qualityProbeCache.set(trackKey(track), probe);
+    if (probe) cacheQualityProbe(trackKey(track), probe);
     return track;
   }).filter(Boolean);
   if (!tracks.length && options.requireTracks !== false) throw new Error(copy.musicNoDownloadableTracks);
@@ -2158,7 +2229,7 @@ const mapMainPlaylistTracks = (listed, provider, fallbackName, options = {}) => 
       playable: true,
     };
     const probe = normalizeRichProbe(item);
-    if (probe) qualityProbeCache.set(trackKey(track), probe);
+    if (probe) cacheQualityProbe(trackKey(track), probe);
     return track;
   }).filter(Boolean);
   if (!tracks.length && options.requireTracks !== false) throw new Error(copy.musicNoDownloadableTracks);
@@ -2606,10 +2677,14 @@ const nativePlaylistLabel = (el) => String(el?.getAttribute('aria-label') || el?
 const nativePlaylistHasTracks = (el) => /[1-9]/u.test(String(el?.querySelector('small')?.textContent || ''));
 const selectNativePlaylist = (imported) => {
   const name = String(imported?.playlistName || '').trim();
+  const id = typeof imported?.playlistId === 'string' ? imported.playlistId : '';
   const surface = document.querySelector('.page-surface[data-route-id="playlists"]:not([hidden])');
-  if (!surface || !name) return false;
-  const nodes = [...surface.querySelectorAll('button.collection-playlist-nav-item--playlist, .playlist-list-item')]
+  if (!surface || (!name && !id)) return false;
+  const nodes = [...surface.querySelectorAll('button.playlist-wall-open, button.collection-playlist-nav-item--playlist, .playlist-list-item')]
     .filter((el) => !el.closest('[data-echo-streaming-daily], .echo-streaming-daily-native'));
+  const byId = id && nodes.find((el) => el.getAttribute('data-wall-focus') === id);
+  if (byId) { byId.click(); return true; }
+  if (!name) return false;
   const matches = nodes.filter((el) => nativePlaylistLabel(el) === name);
   const match = matches.find(nativePlaylistHasTracks)
     || matches[0]
@@ -2636,7 +2711,14 @@ const openImportedPlaylist = async (imported) => {
   }
   for (let attempt = 0; attempt < 24; attempt += 1) {
     await sleep(150);
+    // The current wall can be filtered or paginated. Navigate by id once its
+    // listener is mounted; keep the DOM fallback for older sidebar builds.
+    if (typeof imported.playlistId === 'string' && imported.playlistId) {
+      window.dispatchEvent(new CustomEvent('app:global-search:navigate-playlist', { detail: { playlistId: imported.playlistId } }));
+    }
     if (selectNativePlaylist(imported)) return true;
+    const title = document.querySelector('.page-surface[data-route-id="playlists"]:not([hidden]) .playlist-detail-copy h2');
+    if (imported.playlistName && title?.textContent?.trim() === imported.playlistName) return true;
     if (attempt === 3 || attempt === 10) window.dispatchEvent(new Event('library:playlists-changed'));
   }
   return false;
@@ -2740,7 +2822,7 @@ const mapDailyMainTracks = (listed, fallbackName) => {
       playable: true,
     };
     const probe = normalizeRichProbe(item);
-    if (probe) qualityProbeCache.set(trackKey(track), probe);
+    if (probe) cacheQualityProbe(trackKey(track), probe);
     return track;
   }).filter(Boolean);
   return { name: sanitizeFolderName(listed?.name || fallbackName) || 'Playlist', tracks, skipped: 0 };
@@ -2810,8 +2892,9 @@ const loadDailyPlaylists = async (options = {}) => {
     render();
   }
 };
-const findStreamingNav = () => document.querySelector('.nav-item[data-echo-external-sidebar]')
-  || [...document.querySelectorAll('button.nav-item')].find((button) => /流媒体|Streaming|ECHO Streaming/iu.test(button.textContent || ''));
+const findStreamingNav = () => [...document.querySelectorAll('.nav-item[data-echo-external-sidebar]')]
+  .find((button) => button.getAttribute('data-echo-external-sidebar') === `${manifest.id || 'echo.community-streaming'}:main`)
+  || [...document.querySelectorAll('button.nav-item')].find((button) => !button.hasAttribute('data-echo-external-sidebar') && /流媒体|Streaming|ECHO Streaming/iu.test(button.textContent || ''));
 const openStreamingDailyPlaylist = async (playlist) => {
   findStreamingNav()?.click();
   await sleep(40);
@@ -3302,7 +3385,8 @@ const renderAlbumQualityControl = ({ onChanged } = {}) => {
 const confirmNotice = async () => { if (state.noticeConsent.trim() !== copy.consentPhrase) return; state.noticeOpen = false; state.noticeConsent = ''; state.accepted = true; try { await appApi()?.setSettings?.({ streamingPlaylistImportNoticeAccepted: true }); } catch {} render(); await Promise.all([loadProviders().catch((error) => { state.error = error.message; }), loadFavorites(), loadJobs()]); render(); if (state.pendingAccountSync) { const items = state.pendingAccountSync; state.pendingAccountSync = null; await syncAccountPlaylists(items); } if (state.query) await runSearch(1, 'replace'); };
 const cancelNotice = () => { state.noticeOpen = false; state.noticeConsent = ''; state.pendingAccountSync = null; render(); };
 const loadInitial = async () => { let settings = {}; try { settings = await appApi()?.getSettings?.() || {}; } catch {} state.downloadEnabled = settings.downloadsFeatureUnlocked === true; state.accepted = config.requireConsent === false || settings.streamingPlaylistImportNoticeAccepted === true; state.ready = true; render(); if (!state.accepted) { state.noticeOpen = false; return; } try { await loadProviders(); await Promise.all([loadFavorites(), loadJobs(), loadAccountStatuses().catch(() => undefined)]); bindAccountStatuses(); } catch (error) { state.accountErrors.__global = error instanceof Error ? error.message : String(error); } render(); if (state.query && !state.result) await runSearch(1, 'replace'); if (neteaseConnected()) { if (shouldAutoRefreshDaily()) void runAutoDailyRefresh(); else if (!state.dailyPlaylists.length) void loadDailyPlaylists().catch(() => undefined); paintNativeDailyPanel(); } };
-const bindAccountStatuses = () => { try { accountUnsubscribe?.(); } catch {} const api = accountApi(); if (!api?.onStatusesChanged) return; accountUnsubscribe = api.onStatusesChanged((statuses) => { if (Array.isArray(statuses)) state.accountStatuses = statuses; void loadProviders(true).catch(() => undefined); refreshAccountPage(); if (neteaseConnected() && shouldAutoRefreshDaily()) void runAutoDailyRefresh(); paintNativeDailyPanel(); }); };
+const bindAccountStatuses = () => { try { accountUnsubscribe?.(); } catch {} const api = accountApi(); if (!api?.onStatusesChanged) return; accountUnsubscribe = api.onStatusesChanged((statuses) => { if (packageDisposed) return; if (Array.isArray(statuses)) state.accountStatuses = statuses; void loadProviders(true).catch(() => undefined); refreshAccountPage(); if (neteaseConnected() && shouldAutoRefreshDaily()) void runAutoDailyRefresh(); paintNativeDailyPanel(); }); };
+bindAccountStatuses();
 const installNativePlaylistImport = () => {
   const marker = 'data-echo-streaming-playlist-import';
   const log = (message, extra) => {
@@ -3330,7 +3414,8 @@ const installNativePlaylistImport = () => {
   const findHeader = () => {
     const surface = livePlaylistsSurface();
     if (!surface || !isNativeChrome(surface)) return null;
-    return surface.querySelector('.playlist-home-header, .collection-playlist-sidebar-header, .playlist-sidebar-header, aside.collection-playlist-sidebar > header, .playlist-collection-home > header');
+    return surface.querySelector('.playlist-overview-header, .playlist-home-header, .playlist-collection-home > header')
+      || surface.querySelector('.collection-playlist-sidebar-header, .playlist-sidebar-header, aside.collection-playlist-sidebar > header, .playlist-detail-header');
   };
   // Same inline-SVG shape as the native lucide tool buttons in this header.
   const lucideSvg = (size, paths) => `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${paths}</svg>`;
@@ -3343,6 +3428,7 @@ const installNativePlaylistImport = () => {
     const style = document.createElement('style');
     style.id = importStyleId;
     style.textContent = `
+      .playlist-overview-actions:has([${buttonMarker}]) { display: flex; align-items: center; gap: 8px; }
       .playlist-home-header:has([${buttonMarker}]) { grid-template-columns: minmax(0, 1fr) minmax(250px, 360px) max-content 40px 40px; }
       .playlist-home-header[data-onboarding="true"]:has([${buttonMarker}]) { grid-template-columns: minmax(0, 1fr) minmax(250px, 360px) 40px 40px; }
       @media (max-width: 1040px) {
@@ -3377,7 +3463,7 @@ const installNativePlaylistImport = () => {
     removeForms();
     if (existing) return;
     ensureImportStyle();
-    const home = header.matches('.playlist-home-header, .playlist-collection-home > header');
+    const home = header.matches('.playlist-overview-header, .playlist-home-header, .playlist-collection-home > header');
     const form = document.createElement('form');
     form.className = home ? 'playlist-home-create-form echo-streaming-import-form' : 'playlist-create-form echo-streaming-import-form';
     form.setAttribute(marker, 'true');
@@ -3533,7 +3619,7 @@ const installNativePlaylistImport = () => {
     const surface = livePlaylistsSurface();
     if (!surface || !isNativeChrome(surface)) return null;
     return surface.querySelector('aside.collection-playlist-sidebar, .collection-playlist-sidebar, aside.playlist-sidebar, .playlist-sidebar')
-      || findHeader()?.parentElement
+      || surface.querySelector('.playlist-collection-home')
       || null;
   };
   const nativeIconButton = (svg, title, handler) => {
@@ -3711,7 +3797,7 @@ const installNativePlaylistImport = () => {
   };
   const mount = () => {
     ensureImportStyle();
-    for (const node of document.querySelectorAll(`[${buttonMarker}], form[${marker}], [${dailyMarker}]`)) {
+    for (const node of document.querySelectorAll(`[${buttonMarker}], form[${marker}], form[${linkMarker}], [${dailyMarker}]`)) {
       if (!isLivePage(node)) node.remove();
     }
     const surface = livePlaylistsSurface();
@@ -3722,7 +3808,8 @@ const installNativePlaylistImport = () => {
       return false;
     }
     loggedMiss = false;
-    if (!header.querySelector(`[${buttonMarker}]`)) {
+    const actions = header.querySelector('.playlist-overview-actions, .playlist-detail-primary-actions, .playlist-actions') || header;
+    if (!actions.querySelector(`[${buttonMarker}]`)) {
       const button = document.createElement('button');
       button.type = 'button';
       button.className = 'tool-button';
@@ -3738,9 +3825,9 @@ const installNativePlaylistImport = () => {
         }
         openForm(header);
       });
-      const nativeImport = header.querySelector(':scope > .collection-playlist-import, :scope > .tool-button');
-      if (nativeImport) header.insertBefore(button, nativeImport);
-      else header.append(button);
+      const nativeImport = actions.querySelector(':scope > .collection-playlist-import, :scope > .tool-button');
+      if (nativeImport) actions.insertBefore(button, nativeImport);
+      else actions.append(button);
       if (!loggedMount) {
         loggedMount = true;
         log('added streaming playlist import button next to the local add button');
@@ -3748,7 +3835,8 @@ const installNativePlaylistImport = () => {
     }
     mountDaily();
     mountDailyDetail();
-    ensureLinkRow(findSidebar());
+    const sidebar = findSidebar();
+    if (sidebar?.matches('.collection-playlist-sidebar, .playlist-sidebar')) ensureLinkRow(sidebar);
     return true;
   };
   let mountTimer = 0;
@@ -3783,7 +3871,7 @@ const installNativePlaylistImport = () => {
     window.clearTimeout(mountTimer);
     window.clearInterval(poll);
     paintNativeDailyPanel = () => {};
-    for (const node of document.querySelectorAll(`[${buttonMarker}], form[${marker}], [${dailyMarker}], [${dailyDetailMarker}]`)) node.remove();
+    for (const node of document.querySelectorAll(`[${buttonMarker}], form[${marker}], form[${linkMarker}], [${dailyMarker}], [${dailyDetailMarker}]`)) node.remove();
     document.getElementById(dailyStyleId)?.remove();
     document.getElementById(importStyleId)?.remove();
   };
@@ -3792,7 +3880,7 @@ playlistPageUnsubscribe = installNativePlaylistImport();
 const installLikedSourceSwitch = () => {
   const marker = 'data-echo-streaming-liked-source';
   const styleId = 'echo-streaming-liked-source-style';
-  const likedTitle = /喜欢的歌曲|Liked Songs|Liked tracks/iu;
+  const likedTitle = /喜欢的歌曲|喜歡的歌曲|Liked Songs|Liked tracks/iu;
   const view = { provider: 'local', loading: false, error: '', title: '', tracks: [], token: 0 };
   const providerConnected = (name) => {
     const status = state.accountStatuses.find((item) => item.provider === name);
@@ -3808,6 +3896,17 @@ const installLikedSourceSwitch = () => {
       .echo-streaming-liked-switch button { border: 0; border-radius: 999px; min-height: 28px; padding: 0 10px; background: transparent; color: inherit; font: 650 12px inherit; cursor: pointer; }
       .echo-streaming-liked-switch button[data-active="true"] { background: var(--theme-accent, #5b5ce6); color: #fff; }
       .echo-streaming-liked-switch button:disabled { opacity: 0.45; cursor: default; }
+      [data-echo-streaming-liked-provider] .liked-collection-copy p,
+      [data-echo-streaming-liked-provider] .liked-track-table,
+      [data-echo-streaming-liked-provider] .liked-collection-toolbar,
+      [data-echo-streaming-liked-provider] .liked-selection-bar,
+      [data-echo-streaming-liked-provider] .playlist-empty-state,
+      [data-echo-streaming-liked-provider] .liked-empty-state,
+      [data-echo-streaming-liked-provider] .liked-loading-state,
+      [data-echo-streaming-liked-provider] .list-footer,
+      [data-echo-streaming-liked-provider] .liked-collection-actions > :not([data-echo-streaming-liked-source]) { display: none !important; }
+      .echo-streaming-liked-play-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 12px; }
+      .echo-streaming-liked-count { color: var(--theme-muted-text); font-size: 12px; }
       .echo-streaming-liked-list { display: flex; flex-direction: column; min-height: 120px; }
       .echo-streaming-liked-row { display: grid; grid-template-columns: 28px 42px minmax(0, 1fr) auto; gap: 12px; align-items: center; width: 100%; padding: 7px 12px; border: 0; background: transparent; color: inherit; text-align: left; cursor: pointer; }
       .echo-streaming-liked-row:hover { background: var(--theme-row-hover, rgba(120, 120, 128, 0.08)); }
@@ -3819,8 +3918,8 @@ const installLikedSourceSwitch = () => {
     document.head.append(style);
   };
   const likedRoot = () => {
-    const root = document.querySelector('.page-surface[data-route-id="playlists"]:not([hidden]) .liked-library-workspace');
-    if (!root || !likedTitle.test(root.querySelector('.liked-collection-copy h1')?.textContent || '')) return null;
+    const root = document.querySelector('.page-surface[data-route-id="playlists"]:not([hidden]) .liked-library-workspace, .page-surface[data-route-id="liked"]:not([hidden]) .liked-library-workspace');
+    if (!root || (!root.querySelector('.liked-collection-actions') && !likedTitle.test(root.querySelector('.liked-collection-copy h1')?.textContent || ''))) return null;
     return root;
   };
   const pickLiked = (playlists) => {
@@ -3830,18 +3929,22 @@ const installLikedSourceSwitch = () => {
       || null;
   };
   const restoreNative = (root) => {
-    root?.querySelector('.liked-track-table')?.removeAttribute('hidden');
+    root?.removeAttribute('data-echo-streaming-liked-provider');
     root?.querySelector(`[${marker}="list"]`)?.remove();
-    const count = root?.querySelector('.liked-collection-copy p');
-    if (count?.dataset.echoLikedCount) {
-      count.textContent = count.dataset.echoLikedCount;
-      delete count.dataset.echoLikedCount;
-    }
+
   };
-  const playLiked = async (track) => {
+  const playLiked = async (track, shuffle = false) => {
     const provider = view.provider;
     const playable = view.tracks.filter((item) => item.playable !== false).map((item) => ({ ...item, provider: item.provider || provider }));
-    await playViaQueue({ ...track, provider: track.provider || provider }, {
+    if (!playable.length) return;
+    if (shuffle) {
+      for (let index = playable.length - 1; index > 0; index -= 1) {
+        const target = Math.floor(Math.random() * (index + 1));
+        [playable[index], playable[target]] = [playable[target], playable[index]];
+      }
+    }
+    const first = shuffle ? playable[0] : track || playable[0];
+    await playViaQueue({ ...first, provider: first.provider || provider }, {
       replaceQueueWith: playable.map((item) => toLibraryTrack(item)),
       source: sourceFor(provider, view.title || (chinese ? '我喜欢' : 'Liked')),
     });
@@ -3852,40 +3955,53 @@ const installLikedSourceSwitch = () => {
       restoreNative(root);
       return;
     }
-    root.querySelector('.liked-track-table')?.setAttribute('hidden', '');
+    root.setAttribute('data-echo-streaming-liked-provider', view.provider);
     if (!list) {
       list = document.createElement('div');
       list.className = 'echo-streaming-liked-list';
       list.setAttribute(marker, 'list');
       root.append(list);
     }
-    const count = root.querySelector('.liked-collection-copy p');
-    if (count && !count.dataset.echoLikedCount) count.dataset.echoLikedCount = count.textContent || '';
     list.dataset.key = `${view.provider}:${view.loading ? 1 : 0}:${view.error}:${view.tracks.length}`;
     list.replaceChildren();
     if (view.loading) {
-      if (count) count.textContent = chinese ? '正在读取…' : 'Loading…';
       list.append(Object.assign(document.createElement('div'), { className: 'echo-streaming-liked-note', textContent: chinese ? '正在读取流媒体「我喜欢」…' : 'Loading streaming likes…' }));
       return;
     }
     if (view.error) {
-      if (count) count.textContent = chinese ? '读取失败' : 'Failed';
       list.append(Object.assign(document.createElement('div'), { className: 'echo-streaming-liked-note', textContent: view.error }));
       return;
     }
-    if (count) count.textContent = chinese ? `${view.tracks.length} 项` : `${view.tracks.length} items`;
     if (!view.tracks.length) {
       list.append(Object.assign(document.createElement('div'), { className: 'echo-streaming-liked-note', textContent: chinese ? '这个「我喜欢」里没有歌曲。' : 'This liked playlist is empty.' }));
       return;
     }
+    const playable = view.tracks.some((track) => track.playable !== false);
+    const actions = make('div', 'echo-streaming-liked-play-actions');
+    const play = (shuffle) => playLiked(null, shuffle).catch((error) => { view.error = error instanceof Error ? error.message : String(error); paintList(root); });
+    actions.append(
+      actionButton(chinese ? '播放全部' : 'Play all', 'play', () => play(false), { className: 'liked-primary-action', disabled: !playable }),
+      actionButton(chinese ? '随机播放' : 'Shuffle', 'list', () => play(true), { className: 'liked-collection-secondary-action', disabled: !playable }),
+    );
+    const count = make('span', 'echo-streaming-liked-count');
+    count.textContent = chinese ? `${view.tracks.length} 项` : `${view.tracks.length} items`;
+    actions.append(count);
+    list.append(actions);
     view.tracks.forEach((track, index) => {
       const row = document.createElement('button');
       row.type = 'button';
       row.className = 'echo-streaming-liked-row';
+      row.style.contentVisibility = 'auto';
+      row.style.containIntrinsicBlockSize = 'auto 56px';
+      row.disabled = track.playable === false;
       const number = document.createElement('span');
       number.textContent = String(index + 1);
       const image = document.createElement('img');
       image.alt = '';
+      image.loading = 'lazy';
+      image.decoding = 'async';
+      image.width = 42;
+      image.height = 42;
       image.src = track.coverThumb || track.coverUrl || defaultCover;
       const copyBox = document.createElement('span');
       const title = document.createElement('strong');
@@ -3940,8 +4056,10 @@ const installLikedSourceSwitch = () => {
     }
   };
   const mount = () => {
+    if (packageDisposed) return;
     ensureStyle();
     const root = likedRoot();
+    document.querySelectorAll('[data-echo-streaming-liked-provider]').forEach((node) => { if (node !== root) restoreNative(node); });
     document.querySelectorAll(`[${marker}="switch"]`).forEach((node) => {
       if (!root || !root.contains(node)) node.remove();
     });
@@ -3959,21 +4077,9 @@ const installLikedSourceSwitch = () => {
       bar.className = 'echo-streaming-liked-switch';
       bar.setAttribute(marker, 'switch');
       actions.prepend(bar);
-      if (!root.dataset.echoLikedPlayBound) {
-        root.dataset.echoLikedPlayBound = 'true';
-        root.addEventListener('click', (event) => {
-          if (view.provider === 'local' || view.loading || !view.tracks.length) return;
-          const play = event.target?.closest?.('.liked-primary-action');
-          if (!play || !root.contains(play)) return;
-          event.preventDefault();
-          event.stopPropagation();
-          void playLiked(view.tracks.find((track) => track.playable !== false) || view.tracks[0]).catch((error) => {
-            view.error = error instanceof Error ? error.message : String(error);
-            paintList(root);
-          });
-        }, true);
-      }
+
     }
+    if (!choices.some(([id]) => id === view.provider)) void loadProvider('local');
     const signature = `${choices.map((item) => item[0]).join(',')}:${view.provider}`;
     if (bar.dataset.signature !== signature) {
       bar.dataset.signature = signature;
@@ -4011,8 +4117,10 @@ const installLikedSourceSwitch = () => {
   return () => {
     observer.disconnect();
     window.clearInterval(poll);
+    view.token += 1;
+    view.tracks = [];
+    document.querySelectorAll('[data-echo-streaming-liked-provider]').forEach(restoreNative);
     document.querySelectorAll(`[${marker}]`).forEach((node) => node.remove());
-    document.querySelectorAll('.liked-track-table[hidden]').forEach((node) => node.removeAttribute('hidden'));
     document.getElementById(styleId)?.remove();
   };
 };
@@ -4194,7 +4302,7 @@ const installNativeArtistStreamingAlbums = () => {
   };
 
   const liveArtistPage = () => {
-    const page = document.querySelector('.artist-detail-page');
+    const page = [...document.querySelectorAll('.artist-detail-page')].find((node) => !node.closest('[hidden], [aria-hidden="true"], [data-echo-external-hidden="true"]'));
     if (!page || !page.isConnected) return null;
     if (page.hidden || page.getAttribute('aria-hidden') === 'true') return null;
     const style = window.getComputedStyle(page);
@@ -4204,7 +4312,9 @@ const installNativeArtistStreamingAlbums = () => {
   const liveAlbumsView = () => {
     const page = liveArtistPage();
     if (!page) return null;
-    return page.querySelector('.artist-tab-panel.artist-albums-view, .artist-albums-view');
+    const panel = page.querySelector('.artist-tab-panel.artist-albums-view, .artist-albums-view');
+    if (!panel || panel.hidden || panel.getAttribute('aria-hidden') === 'true' || window.getComputedStyle(panel).display === 'none') return null;
+    return panel;
   };
   const cleanArtistName = (value) => String(value || '')
     .replace(/^[\s"'「『【\[]+|[\s"'」』】\]]+$/gu, '')
@@ -4226,11 +4336,8 @@ const installNativeArtistStreamingAlbums = () => {
     ui.detailLoading = false;
     ui.detailError = null;
     ui.resolvingKey = null;
-    const page = liveArtistPage();
-    if (page) {
-      page.removeAttribute(detailMarker);
-      page.querySelectorAll(`[${detailMarker}-panel]`).forEach((node) => node.remove());
-    }
+    document.querySelectorAll(`[${detailMarker}]`).forEach((page) => page.removeAttribute(detailMarker));
+    document.querySelectorAll(`[${detailMarker}-panel]`).forEach((node) => node.remove());
   };
 
   const sectionPaintKey = () => [
@@ -4664,6 +4771,7 @@ const installNativeArtistStreamingAlbums = () => {
       }
       return;
     }
+    if (!albumsView && !ui.selected) return;
     const artistName = readArtistName(page, albumsView);
     if (artistName) {
       const key = `${artistName}::${provider}`;
@@ -4805,11 +4913,11 @@ window.addEventListener('echo-native', onNativeBroadcast);
 document.addEventListener('click', onPausedPlaybackClick, true);
 const playbackStatusTimer = window.setInterval(() => void refreshPlaybackStatus(), 750);
 void refreshPlaybackStatus();
-const installListeners = () => { if (downloadApi()?.onJobsUpdated) downloadUnsubscribe = downloadApi().onJobsUpdated((jobs) => { state.downloadJobs = Array.isArray(jobs) ? jobs : []; indexDownloadJobs(state.downloadJobs); state.downloadJobs.forEach(notifyDownloadJob); render(); }); bindAccountStatuses(); void invokeMain('target', {}).then((result) => { if (result?.directory) state.musicTargetBase = String(result.directory); }).catch(() => undefined); statusTimer = window.setInterval(() => { if (disposed) return; const key = playCurrentStableKey(); if (key !== state.currentStableKey) { state.currentStableKey = key; void similarOnTrackChange(); render(); } }, 1000); };
+const installListeners = () => { if (downloadApi()?.onJobsUpdated) downloadUnsubscribe = downloadApi().onJobsUpdated((jobs) => { state.downloadJobs = Array.isArray(jobs) ? jobs : []; indexDownloadJobs(state.downloadJobs); state.downloadJobs.forEach(notifyDownloadJob); render(); }); bindAccountStatuses(); void invokeMain('target', {}).then((result) => { if (result?.directory) state.musicTargetBase = String(result.directory); }).catch(() => undefined); statusTimer = window.setInterval(() => { if (disposed) return; const key = playCurrentStableKey(); if (key) void similarOnTrackChange(); if (key !== state.currentStableKey) { state.currentStableKey = key; syncPlaybackRows(); } }, 1000); };
 
 const stopAccountQrPolling = () => { window.clearTimeout(accountQrTimer); accountQrTimer = 0; state.accountQr = null; removeNeteaseQrBackdrop(); };
 const streamingSidebarOrder = Number(manifest.sidebarOrder) || 40;
-const disposeSidebar = external.sidebar.register({ id: 'main', label: copy.streamingTitle || copy.streaming, icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18V5l10-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="16" cy="16" r="3"/></svg>', order: streamingSidebarOrder, render(root) { pageRoot = root; disposed = false; installListeners(); render(); void fixSyncedPlaylistKinds(); void loadInitial(); return () => { disposed = true; window.clearTimeout(searchTimer); window.clearInterval(statusTimer); resetSearchInput(); cancelPlaybackPrepare(); closeStreamMenu(); closePlaylistDownloadDialog(); accountUnsubscribe?.(); downloadUnsubscribe?.(); accountUnsubscribe = null; downloadUnsubscribe = null; pageRoot = null; }; } });
+const disposeSidebar = external.sidebar.register({ id: 'main', label: copy.streamingTitle || copy.streaming, icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18V5l10-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="16" cy="16" r="3"/></svg>', order: streamingSidebarOrder, render(root) { pageRoot = root; disposed = false; installListeners(); render(); void fixSyncedPlaylistKinds(); void loadInitial(); return () => { disposed = true; window.clearTimeout(searchTimer); window.clearInterval(statusTimer); resetSearchInput(); cancelPlaybackPrepare(); closeStreamMenu(); closePlaylistDownloadDialog(); downloadUnsubscribe?.(); downloadUnsubscribe = null; pageRoot = null; }; } });
 accountsSidebarUnsubscribe = external.sidebar.register({
   id: 'accounts',
   label: accountText('流媒体账号', 'Streaming accounts'),
@@ -4832,4 +4940,4 @@ accountsSidebarUnsubscribe = external.sidebar.register({
     };
   },
 });
-return () => { disposed = true; packageDisposed = true; window.clearInterval(playbackStatusTimer); window.clearTimeout(playbackStatusTimeout); document.removeEventListener('click', onPausedPlaybackClick, true); syncNativePlaybackButtons(false); document.getElementById('streaming-recent-del-style')?.remove(); window.clearTimeout(searchTimer); window.clearInterval(statusTimer); window.clearInterval(dailyRefreshTimer); window.clearTimeout(dailyRefreshWarmupTimer); document.removeEventListener('click', onUnavailableStreamingPlaylistClick, true); window.removeEventListener('echo-native', onNativeBroadcast); resetSearchInput(); cancelPlaybackPrepare(); stopAccountQrPolling(); closeAccountDialog(); closeStreamMenu(); closePlaylistDownloadDialog(); accountUnsubscribe?.(); downloadUnsubscribe?.(); playlistPageUnsubscribe?.(); likedSourceUnsubscribe?.(); artistStreamingAlbumsUnsubscribe?.(); document.querySelectorAll('.settings-qr-login-backdrop[data-echo-streaming-qr]').forEach((node) => node.remove()); document.getElementById('echo-community-streaming-spatial')?.remove(); document.getElementById('echo-artist-streaming-albums-style')?.remove(); document.querySelectorAll('[data-echo-artist-streaming-albums], [data-echo-artist-streaming-album-detail-panel]').forEach((node) => node.remove()); disposeSidebar?.(); accountsSidebarUnsubscribe?.(); qobuzSidebarUnsubscribe?.(); };
+return () => { flushScrollSave(); window.removeEventListener('pagehide', flushScrollSave); disposed = true; packageDisposed = true; qualityProbeCache.clear(); window.clearInterval(playbackStatusTimer); window.clearTimeout(playbackStatusTimeout); document.removeEventListener('click', onPausedPlaybackClick, true); syncNativePlaybackButtons(false); document.getElementById('streaming-recent-del-style')?.remove(); window.clearTimeout(searchTimer); window.clearInterval(statusTimer); window.clearInterval(dailyRefreshTimer); window.clearTimeout(dailyRefreshWarmupTimer); document.removeEventListener('click', onUnavailableStreamingPlaylistClick, true); window.removeEventListener('echo-native', onNativeBroadcast); resetSearchInput(); cancelPlaybackPrepare(); stopAccountQrPolling(); closeAccountDialog(); closeStreamMenu(); closePlaylistDownloadDialog(); accountUnsubscribe?.(); downloadUnsubscribe?.(); playlistPageUnsubscribe?.(); likedSourceUnsubscribe?.(); artistStreamingAlbumsUnsubscribe?.(); document.querySelectorAll('.settings-qr-login-backdrop[data-echo-streaming-qr]').forEach((node) => node.remove()); document.getElementById('echo-community-streaming-spatial')?.remove(); document.getElementById('echo-artist-streaming-albums-style')?.remove(); document.querySelectorAll('[data-echo-artist-streaming-albums], [data-echo-artist-streaming-album-detail-panel]').forEach((node) => node.remove()); disposeSidebar?.(); accountsSidebarUnsubscribe?.(); qobuzSidebarUnsubscribe?.(); };
