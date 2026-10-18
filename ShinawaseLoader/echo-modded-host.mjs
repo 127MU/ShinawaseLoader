@@ -6,7 +6,8 @@ import { fileURLToPath } from 'node:url';
 import { DARWIN_APP_NAMES, planModdedLaunchArgs, rankEchoInstall } from './platform.mjs';
 
 const loaderDir = dirname(fileURLToPath(import.meta.url));
-const steamAppId = '5105150';
+// ECHO's Steam AppId; 5105150 is ECHO Playtest.
+const steamAppId = '5105090';
 
 const readRuntimePath = (loaderRoot) => {
   try {

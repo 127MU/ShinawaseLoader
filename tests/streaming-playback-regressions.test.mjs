@@ -6,7 +6,8 @@ import { randomBytes } from 'node:crypto';
 import vm from 'node:vm';
 
 const shim = readFileSync(new URL('../ShinawaseLoader/playback-shim.cjs', import.meta.url), 'utf8');
-const mod = readFileSync(new URL('../examples/ECHO-Streaming/echomod/mod.js', import.meta.url), 'utf8');
+// Slice anchors below contain "\n"; a CRLF checkout (Windows autocrlf) must still match.
+const mod = readFileSync(new URL('../examples/ECHO-Streaming/echomod/mod.js', import.meta.url), 'utf8').replace(/\r\n/gu, '\n');
 const between = (source, start, end) => source.slice(source.indexOf(start), source.indexOf(end, source.indexOf(start)));
 
 test('first proxy playback and source resolution wait for the real listening port', async () => {

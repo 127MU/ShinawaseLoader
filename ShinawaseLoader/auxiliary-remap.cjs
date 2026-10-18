@@ -185,8 +185,13 @@ const installAuxiliaryRemap = (host = {}) => {
   try {
     result.prototype = patchPrototype(BrowserWindow);
     result.session = installSessionBoot(session?.defaultSession);
+    // A retry after a partial install (prototype patch failed) must not stack
+    // a second window hook on the app.
     if (app?.on && BrowserWindow) {
-      app.on('browser-window-created', (_event, window) => watchWindow(window));
+      if (!app.__shinawaseAuxWindowHook) {
+        app.__shinawaseAuxWindowHook = true;
+        app.on('browser-window-created', (_event, window) => watchWindow(window));
+      }
       for (const window of BrowserWindow.getAllWindows?.() || []) {
         watchWindow(window);
         result.windows += 1;

@@ -129,7 +129,7 @@ export const createHarness = (options = {}) => {
           while (mock.extendDisposers.length) mock.extendDisposers.pop()?.();
         }
       };
-      registry[id] = { source, signature, dispose };
+      registry[id] = { signature, dispose };
       return { status: 'injected', id };
     },
 

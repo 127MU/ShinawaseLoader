@@ -212,13 +212,15 @@ type EchoExternalMod = {
   manifest: Record<string, unknown>;
   config: Record<string, unknown>;
   /**
-   * The renderer `window.echo` preload API. On echo-steam 26.8.28 the observed
+   * The renderer `window.echo` preload API. On echo-steam 26.10.18 the observed
    * namespaces include `steam`, `workshop`, `app`, `desktopLyrics`, `miniPlayer`,
-   * `pet`, `library`, `playback`, `streaming`, `lyrics`, `mv`, and `accounts`.
+   * `pet`, `library`, `playback`, `lyrics`, plus `streaming` and `accounts` from
+   * the Loader's preload bridge (ECHO retired its own `mv` namespace in 26.10.8).
    * Other keys may exist; method signatures are not frozen here.
    * Custom URL schemes on this build: `echo-cover`, `echo-audio`, `echo-video`,
    * `echo-mv`, `echo-wallpaper`, `echo-image`, `echo-artist-image`,
-   * `echo-album-extra`, `echo-workshop`, `echo-osu-sb`.
+   * `echo-album-extra`, `echo-workshop`, `echo-osu-sb`, `echo-font`,
+   * `echo-listening-avatar`.
    * Host audio-backend contract: `audioBackendContractVersion = 2`.
    * userData is `%APPDATA%\ECHO Steam` unless `ECHO_USER_DATA_PATH_OVERRIDE` is set.
    * Prefer `sdk.list()` / `sdk.get()` / `GET /api/sdk` at runtime.

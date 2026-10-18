@@ -92,14 +92,15 @@ const readChoice = (items, hint) => new Promise((resolve) => {
 });
 
 const loaderDir = dirname(fileURLToPath(import.meta.url));
-const loaderVersion = '1.8.0';
+const loaderVersion = '1.8.1';
 const DEFAULT_MARKET_CATALOG_URL = 'https://echo.shiinasuki.com/mod-market/index.json';
 // Last verified Steam host. Do not treat FileVersion as an Electron ABI.
 // Isolated runtime tracks the installed asar/exe via runtime-sync.mjs.
 const alignedEchoProduct = 'echo-steam';
-const alignedEchoVersion = '26.9.16';
+const alignedEchoVersion = '26.10.18';
 const alignedElectronVersion = '43.5.1';
-const echoSteamAppId = '5105150';
+// 5105150 is ECHO Playtest.
+const echoSteamAppId = '5105090';
 const echoUserDataFolderName = 'ECHO Steam';
 const root = resolve(process.env.ECHO_MOD_HOME || loaderDir);
 const workspaceRoot = resolve(process.env.ECHO_WORKSPACE_ROOT || join(root, '..'));
@@ -143,20 +144,56 @@ const formatLogValue = (value) => {
   if (typeof value === 'string') return value;
   try { return JSON.stringify(value); } catch { return String(value); }
 };
+// Lines are batched and appended once per event-loop turn instead of two
+// synchronous appends per line (chatty Mods forward every console call here),
+// and each file rotates to <name>.1 past maxLogBytes so it cannot grow without
+// bound. The exit hook flushes whatever is still pending.
 let logsDirReady = false;
-const log = (level, message, ...values) => {
-  const normalizedLevel = String(level || 'INFO').toUpperCase();
-  const severity = normalizedLevel.endsWith(':ERROR') ? 'ERROR' : normalizedLevel.endsWith(':WARN') ? 'WARN' : normalizedLevel.endsWith(':DEBUG') ? 'DEBUG' : normalizedLevel.endsWith(':INFO') || normalizedLevel.endsWith(':LOG') ? 'INFO' : normalizedLevel;
-  if ((logRanks[severity] || logRanks.INFO) < (logRanks[configuredLogLevel] || logRanks.INFO)) return;
-  const line = `[${new Date().toISOString()}] [${normalizedLevel}] ${message}${values.length ? ` ${values.map(formatLogValue).join(' ')}` : ''}`;
+let pendingLogText = '';
+let pendingErrorText = '';
+let logFlushScheduled = false;
+const maxLogBytes = 8 * 1024 * 1024;
+const logRotateCheckBytes = 512 * 1024;
+let logBytesSinceRotateCheck = logRotateCheckBytes;
+const rotateLogFile = (file) => {
+  const stats = statSync(file, { throwIfNoEntry: false });
+  if (!stats || stats.size < maxLogBytes) return;
+  try { renameSync(file, `${file}.1`); } catch {}
+};
+const flushLogs = () => {
+  logFlushScheduled = false;
+  if (!pendingLogText && !pendingErrorText) return;
+  const text = pendingLogText;
+  const errors = pendingErrorText;
+  pendingLogText = '';
+  pendingErrorText = '';
   try {
     if (!logsDirReady) {
       mkdirSync(logsRoot, { recursive: true });
       logsDirReady = true;
     }
-    appendFileSync(logFilePath, `${line}\n`, 'utf8');
-    if (severity === 'ERROR') appendFileSync(errorLogPath, `${line}\n`, 'utf8');
+    if (logBytesSinceRotateCheck >= logRotateCheckBytes) {
+      logBytesSinceRotateCheck = 0;
+      rotateLogFile(logFilePath);
+      rotateLogFile(errorLogPath);
+    }
+    if (text) appendFileSync(logFilePath, text, 'utf8');
+    if (errors) appendFileSync(errorLogPath, errors, 'utf8');
+    logBytesSinceRotateCheck += text.length + errors.length;
   } catch { logsDirReady = false; }
+};
+process.on('exit', flushLogs);
+const log = (level, message, ...values) => {
+  const normalizedLevel = String(level || 'INFO').toUpperCase();
+  const severity = normalizedLevel.endsWith(':ERROR') ? 'ERROR' : normalizedLevel.endsWith(':WARN') ? 'WARN' : normalizedLevel.endsWith(':DEBUG') ? 'DEBUG' : normalizedLevel.endsWith(':INFO') || normalizedLevel.endsWith(':LOG') ? 'INFO' : normalizedLevel;
+  if ((logRanks[severity] || logRanks.INFO) < (logRanks[configuredLogLevel] || logRanks.INFO)) return;
+  const line = `[${new Date().toISOString()}] [${normalizedLevel}] ${message}${values.length ? ` ${values.map(formatLogValue).join(' ')}` : ''}`;
+  pendingLogText += `${line}\n`;
+  if (severity === 'ERROR') pendingErrorText += `${line}\n`;
+  if (!logFlushScheduled) {
+    logFlushScheduled = true;
+    setImmediate(flushLogs);
+  }
   const method = severity === 'ERROR' ? console.error : severity === 'WARN' ? console.warn : console.log;
   method(line);
 };
@@ -744,7 +781,9 @@ const callNativeHost = async (body) => {
 const notifyNativeHost = async (reason = 'reload') => {
   if (!nativeHostEnabled) return null;
   try {
-    const remote = await fetch(`${nativeHostUrl()}/reload`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' });
+    // Package changes restart only the packages that changed; an explicit API
+    // reload restarts all of them.
+    const remote = await fetch(`${nativeHostUrl()}/reload`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ changedOnly: reason !== 'api' }) });
     return remoteJson(remote);
   } catch (error) {
     log('DEBUG', `native host reload skipped (${reason})`, error instanceof Error ? error.message : String(error));
@@ -827,14 +866,21 @@ const openCdpSession = async (webSocketUrl) => {
   const socket = new WebSocket(webSocketUrl);
   const pending = new Map();
   let sequence = 0;
-  const withTimeout = (work, label) => new Promise((resolvePromise, reject) => {
-    const timer = setTimeout(() => reject(new Error(label)), cdpTimeoutMs);
+  const withTimeout = (work, label, onTimeout) => new Promise((resolvePromise, reject) => {
+    const timer = setTimeout(() => { onTimeout?.(); reject(new Error(label)); }, cdpTimeoutMs);
     Promise.resolve(work).then((value) => { clearTimeout(timer); resolvePromise(value); }, (error) => { clearTimeout(timer); reject(error); });
   });
-  await withTimeout(new Promise((resolvePromise, reject) => {
-    socket.addEventListener('open', () => resolvePromise(), { once: true });
-    socket.addEventListener('error', () => reject(new Error('cdp_socket_error')), { once: true });
-  }), 'cdp_connect_timeout');
+  // A connect that fails or times out must still release the socket; the
+  // injection loop retries every few seconds and would otherwise pile them up.
+  try {
+    await withTimeout(new Promise((resolvePromise, reject) => {
+      socket.addEventListener('open', () => resolvePromise(), { once: true });
+      socket.addEventListener('error', () => reject(new Error('cdp_socket_error')), { once: true });
+    }), 'cdp_connect_timeout');
+  } catch (error) {
+    try { socket.close(); } catch {}
+    throw error;
+  }
   socket.addEventListener('message', (event) => {
     let message;
     try { message = JSON.parse(String(event.data)); } catch { return; }
@@ -849,11 +895,13 @@ const openCdpSession = async (webSocketUrl) => {
   };
   socket.addEventListener('close', () => failAll('cdp_socket_closed'), { once: true });
   socket.addEventListener('error', () => failAll('cdp_socket_error'));
-  const call = (method, params) => withTimeout(new Promise((resolvePromise, reject) => {
+  const call = (method, params) => {
     const id = ++sequence;
-    pending.set(id, { resolve: resolvePromise, reject, method });
-    try { socket.send(JSON.stringify({ id, method, params })); } catch (error) { pending.delete(id); reject(error); }
-  }), `cdp_${method}_timeout`);
+    return withTimeout(new Promise((resolvePromise, reject) => {
+      pending.set(id, { resolve: resolvePromise, reject, method });
+      try { socket.send(JSON.stringify({ id, method, params })); } catch (error) { pending.delete(id); reject(error); }
+    }), `cdp_${method}_timeout`, () => pending.delete(id));
+  };
   return {
     async evaluate(expression) {
       const result = await call('Runtime.evaluate', { expression, awaitPromise: true, returnByValue: true, userGesture: true });
@@ -943,24 +991,22 @@ const injectLoaderUi = async (session) => {
 
 const playerRuntimeExpression = `(() => {
     if (window.__echoExternalPlayer?.version >= 1) return 'already';
+    // Called on every status/control request. child/sibling links form a tree,
+    // so an explicit stack walks it in the same pre-order as the old recursion
+    // without a visited Set per call or a recursion-depth cutoff on long lists.
     const findQueue = () => {
       const root = window.__echoReactRoot?._internalRoot?.current;
       if (!root) return null;
-      const seen = new Set();
-      let found = null;
-      const visit = (fiber, depth = 0) => {
-        if (!fiber || found || seen.has(fiber) || depth > 10000) return;
-        seen.add(fiber);
+      const stack = [root];
+      let budget = 500000;
+      while (stack.length && budget-- > 0) {
+        const fiber = stack.pop();
         const value = fiber.memoizedProps?.value;
-        if (value && typeof value.playTrack === 'function' && typeof value.appendToQueue === 'function') {
-          found = value;
-          return;
-        }
-        visit(fiber.child, depth + 1);
-        visit(fiber.sibling, depth + 1);
-      };
-      visit(root);
-      return found;
+        if (value && typeof value.playTrack === 'function' && typeof value.appendToQueue === 'function') return value;
+        if (fiber.sibling) stack.push(fiber.sibling);
+        if (fiber.child) stack.push(fiber.child);
+      }
+      return null;
     };
     const playback = () => window.echo?.playback;
     const asPlayable = (track) => {
@@ -1217,7 +1263,10 @@ const extendRuntimeExpression = `(() => {
       return page;
     };
     const currentRoute = () => document.querySelector('.page-surface[data-route-id]:not([hidden])')?.getAttribute('data-route-id') || null;
+    // Surfaces this runtime hid, so restoring them needs no document-wide scan.
+    const replacedSurfaces = new Set();
     const syncReplacements = () => {
+      if (!replacements.size && !replacedSurfaces.size) return syncRouteObserver();
       const routeId = currentRoute();
       replacements.forEach((entry, id) => {
         const native = document.querySelector(routeSelector(id));
@@ -1226,6 +1275,7 @@ const extendRuntimeExpression = `(() => {
           if (native) {
             native.dataset.echoExternalReplaced = 'true';
             native.style.setProperty('display', 'none', 'important');
+            replacedSurfaces.add(native);
           }
           page.hidden = false;
           if (!entry.mounted) {
@@ -1241,12 +1291,14 @@ const extendRuntimeExpression = `(() => {
         }
         page.hidden = true;
       });
-      document.querySelectorAll('[data-echo-external-replaced="true"]').forEach((surface) => {
+      replacedSurfaces.forEach((surface) => {
         const id = surface.getAttribute('data-route-id');
-        if (replacements.has(id) && id === routeId) return;
+        if (surface.isConnected && replacements.has(id) && id === routeId) return;
+        replacedSurfaces.delete(surface);
         delete surface.dataset.echoExternalReplaced;
         if (!surface.dataset.echoExternalHidden) surface.style.removeProperty('display');
       });
+      syncRouteObserver();
     };
     // echo-steam dropped per-route [data-workshop-icon] nav hooks the
     // CSS hiding relied on, but exposes native sidebar route hiding through the
@@ -1379,16 +1431,28 @@ const extendRuntimeExpression = `(() => {
     window.addEventListener('app:navigate:lyrics-back', () => requestAnimationFrame(syncReplacements));
     window.addEventListener('app:navigate:queue', () => requestAnimationFrame(syncReplacements));
     window.addEventListener('app:navigate:settings', () => requestAnimationFrame(syncReplacements));
-    const observer = new MutationObserver(() => syncReplacements());
-    observer.observe(document.documentElement, { subtree: true, attributes: true, attributeFilter: ['hidden'] });
+    // The document-wide [hidden] observer only runs while a route replacement
+    // exists; ECHO toggles hidden constantly, and with no replacement there is
+    // nothing to sync.
+    const routeObserver = new MutationObserver(() => syncReplacements());
+    let routeObserverActive = false;
+    function syncRouteObserver() {
+      const wanted = replacements.size > 0 || replacedSurfaces.size > 0;
+      if (wanted === routeObserverActive) return;
+      routeObserverActive = wanted;
+      if (wanted) routeObserver.observe(document.documentElement, { subtree: true, attributes: true, attributeFilter: ['hidden'] });
+      else routeObserver.disconnect();
+    }
     window.__echoExternalExtend = extend;
     return 'installed';
   })()`;
 const injectExtendRuntime = (session) => session.evaluate(extendRuntimeExpression);
 
 const removeInjected = async (id) => {
+  // Mods are only ever injected into ECHO's main renderer, so only those
+  // targets need the dispose round trip.
   let targets = [];
-  try { targets = await cdpTargets(); } catch { return; }
+  try { targets = await cdpMainTargets(); } catch { return; }
   for (const target of targets) {
     await cdpEvaluate(target.webSocketDebuggerUrl, `(() => {
       const mod = window.__echoExternalMods?.[${JSON.stringify(id)}];
@@ -1404,7 +1468,7 @@ const removeInjected = async (id) => {
 
 const injectIntoTarget = async (session, plan, { force = false } = {}) => {
   const expression = `(async () => {
-    const id = ${JSON.stringify(plan.id)}, ctx = ${plan.contextJson}, source = ${JSON.stringify(plan.source)}, signature = ${JSON.stringify(plan.signature)};
+    const id = ${JSON.stringify(plan.id)}, ctx = ${plan.contextJson}, signature = ${JSON.stringify(plan.signature)};
     window.__echoExternalMods = window.__echoExternalMods || {};
     const old = window.__echoExternalMods[id];
     if (old?.signature === signature && !${force ? 'true' : 'false'}) return { status: 'already' };
@@ -1557,9 +1621,23 @@ const injectIntoTarget = async (session, plan, { force = false } = {}) => {
         },
       },
     };
+    // Forwarded lines are batched into one POST per 250ms (or per 250 lines)
+    // instead of one request per console call; a Mod that logs every frame
+    // would otherwise flood the loader with requests. Flushed on dispose.
+    const logQueue = [];
+    let logFlushTimer = 0;
+    const flushModLog = () => {
+      if (logFlushTimer) clearTimeout(logFlushTimer);
+      logFlushTimer = 0;
+      if (!logQueue.length) return;
+      const entries = logQueue.splice(0, logQueue.length);
+      void fetch(ctx.baseUrl + '/api/log', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ id, entries }) }).catch(() => undefined);
+    };
     const modConsole = Object.fromEntries(['debug', 'info', 'log', 'warn', 'error'].map((level) => [level, (...values) => {
       const message = values.map((value) => { try { return typeof value === 'string' ? value : JSON.stringify(value); } catch { return String(value); } }).join(' ');
-      void fetch(ctx.baseUrl + '/api/log', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ id, level, message }) }).catch(() => undefined);
+      logQueue.push({ level, message: message.length > 8192 ? message.slice(0, 8192) : message });
+      if (logQueue.length >= 250) flushModLog();
+      else if (!logFlushTimer) logFlushTimer = setTimeout(flushModLog, 250);
       const native = window.console?.[level] || window.console?.log;
       native?.call(window.console, '[Mod ' + id + ']', ...values);
     }]));
@@ -1576,9 +1654,13 @@ const injectIntoTarget = async (session, plan, { force = false } = {}) => {
       try { if (typeof returnedDispose === 'function') returnedDispose(); } finally {
         while (sidebarDisposers.length) sidebarDisposers.pop()?.();
         while (extendDisposers.length) extendDisposers.pop()?.();
+        flushModLog();
       }
     };
-    window.__echoExternalMods[id] = { source, signature, dispose };
+    // The entry source is not kept here: the compiled script already holds it,
+    // and a second copy per Mod (plus its JSON literal in this script) only cost
+    // renderer memory.
+    window.__echoExternalMods[id] = { signature, dispose };
     return { status: 'injected', id };
   })()`;
   return session.evaluate(expression);
@@ -1744,7 +1826,7 @@ const injectEnabled = async () => {
       const targetState = probe?.result?.value;
       if (targetState?.ready !== true) continue;
       lastCycleReadyCount += 1;
-      const uiReloaded = targetState.uiVersion < 65;
+      const uiReloaded = targetState.uiVersion < 66;
       // Replacing a live UI drops the sidebar pages mods registered on it, so
       // those mods have to run again (dispose + inject, as on disable/enable).
       const uiReplaced = uiReloaded && targetState.uiVersion > 0;
@@ -2062,15 +2144,21 @@ const readAsarJson = (archive, relativePath) => {
     if (fd !== undefined) try { closeSync(fd); } catch {}
   }
 };
-let echoProductCache = { key: '', value: null };
+// /api/status describes every discovered install on each poll; keep one entry
+// per executable so two installs do not evict each other and re-parse the
+// asar header every time.
+const echoProductCache = new Map();
 const readEchoProduct = (exePath) => {
   const dir = dirname(exePath);
   const asar = join(resourcesDirForExecutable(exePath), 'app.asar');
   const versionFile = join(dir, 'version');
-  let cacheKey = exePath;
-  try { cacheKey += `|${statSync(asar).mtimeMs}|${statSync(asar).size}`; } catch {}
-  try { cacheKey += `|${statSync(versionFile).mtimeMs}`; } catch {}
-  if (echoProductCache.key === cacheKey) return echoProductCache.value;
+  let cacheKey = '';
+  const asarStat = statSync(asar, { throwIfNoEntry: false });
+  if (asarStat) cacheKey += `|${asarStat.mtimeMs}|${asarStat.size}`;
+  const versionStat = statSync(versionFile, { throwIfNoEntry: false });
+  if (versionStat) cacheKey += `|${versionStat.mtimeMs}`;
+  const cached = echoProductCache.get(exePath);
+  if (cached?.key === cacheKey) return cached.value;
   const asarPackage = readAsarJson(asar, 'package.json');
   let electronVersion = null;
   try {
@@ -2089,7 +2177,8 @@ const readEchoProduct = (exePath) => {
     alignedEchoVersion,
     source: asarPackage ? 'asar-package.json' : (electronVersion ? 'version-file' : 'path'),
   };
-  echoProductCache = { key: cacheKey, value };
+  echoProductCache.set(exePath, { key: cacheKey, value });
+  while (echoProductCache.size > 16) echoProductCache.delete(echoProductCache.keys().next().value);
   return value;
 };
 const describeEchoInstall = (exePath) => readEchoProduct(exePath);
@@ -2464,10 +2553,10 @@ const marketRecommendScore = (item, installedIds, installedTags) => {
   if (uploaded && Date.now() - uploaded < 14 * 86400000) score += 8;
   return score;
 };
-const decorateMarketListing = (listing) => {
+const decorateMarketListing = (listing, state = readState()) => {
   const record = findPackage(listing.id);
   const installedVersion = record ? String(record.manifest?.version || '1.0.0') : null;
-  const enabled = readState().mods[listing.id]?.enabled === true;
+  const enabled = state.mods[listing.id]?.enabled === true;
   const updateAvailable = Boolean(installedVersion && compareModVersions(listing.version, installedVersion) > 0);
   const status = record && updateAvailable ? 'update' : record ? 'installed' : 'available';
   return { ...listing, installed: Boolean(record), installedVersion, enabled, updateAvailable, status };
@@ -2482,11 +2571,12 @@ const listMarket = async (options = {}) => {
       catalog = await readMarketCatalog(options);
     }
     const seen = new Set();
+    const state = readState();
     const mods = catalog.mods.map(normalizeMarketListing).filter(Boolean).filter((item) => {
       if (!item.id || seen.has(item.id)) return false;
       seen.add(item.id);
       return true;
-    }).map(decorateMarketListing);
+    }).map((item) => decorateMarketListing(item, state));
     const installedIds = new Set(mods.filter((item) => item.installed).map((item) => item.id));
     const installedTags = new Set(mods.filter((item) => item.installed).flatMap((item) => item.tags || []));
     const recommended = mods
@@ -2593,6 +2683,7 @@ const server = createServer(async (request, response) => {
         : null;
       let selectedEchoInstall = null;
       try { selectedEchoInstall = describeEchoInstall(findEcho()); } catch {}
+      const echoes = discoverEchoes(echoExe || null);
       return jsonResponse(response, 200, {
         ok: true, loaderVersion, root, gameRoot, port, debugPort,
         loadMode, autoStart, autoStartMode, safeMode, debugMode, injectIntervalMs, startupDelayMs, logLevel: configuredLogLevel,
@@ -2616,8 +2707,8 @@ const server = createServer(async (request, response) => {
           runtime: describeRuntimeSync(),
         },
         ...(togetherRelay ? { togetherRelay } : {}),
-        echo: discoverEchoes(echoExe || null),
-        echoInstalls: discoverEchoes(echoExe || null).map(describeEchoInstall),
+        echo: echoes,
+        echoInstalls: echoes.map(describeEchoInstall),
         marketUrl: marketCatalogUrl,
         autoUpdate: autoUpdateEnabled(),
       });
@@ -2739,9 +2830,14 @@ const server = createServer(async (request, response) => {
     if (request.method === 'POST' && url.pathname === '/api/log') {
       const body = await readRequest(request);
       const id = safeId(body.id) ? body.id : 'unknown-mod';
-      const level = ['debug', 'info', 'log', 'warn', 'error'].includes(body.level) ? String(body.level).toUpperCase() : 'INFO';
-      const message = String(body.message || '').slice(0, 8192);
-      log(`MOD:${level}`, `${id} ${message}`);
+      // Injected Mods batch lines as { id, entries: [{ level, message }] };
+      // the single { id, level, message } shape stays accepted.
+      const entries = Array.isArray(body.entries) ? body.entries.slice(0, 256) : [body];
+      for (const entry of entries) {
+        const level = ['debug', 'info', 'log', 'warn', 'error'].includes(entry?.level) ? String(entry.level).toUpperCase() : 'INFO';
+        const message = String(entry?.message || '').slice(0, 8192);
+        log(`MOD:${level}`, `${id} ${message}`);
+      }
       return jsonResponse(response, 204, {});
     }
     if (request.method === 'GET' && url.pathname === '/api/mods') {

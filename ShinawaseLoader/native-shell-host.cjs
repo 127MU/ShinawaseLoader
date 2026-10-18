@@ -185,11 +185,18 @@ const activate = (host, spec = {}) => {
     return next;
   };
 
+  // The cover is a data URL of up to ~2.7MB; compare it by value separately
+  // instead of serializing it into the dedupe key on every status update.
+  let lastSentCover = '';
   const pushStatus = (payload, force) => {
     const next = rememberCover(payload);
-    const body = JSON.stringify(next);
-    if (!force && body === lastSentStatus) return;
-    if (send('status', next)) lastSentStatus = body;
+    const cover = String(next.coverUrl || '');
+    const body = JSON.stringify({ ...next, coverUrl: '' });
+    if (!force && body === lastSentStatus && cover === lastSentCover) return;
+    if (send('status', next)) {
+      lastSentStatus = body;
+      lastSentCover = cover;
+    }
   };
 
   const focusEcho = () => {
@@ -274,6 +281,8 @@ const activate = (host, spec = {}) => {
           buf = buf.slice(idx + 1);
           handleLine(line);
         }
+        // A shell that never sends a newline must not grow this without bound.
+        if (buf.length > 1024 * 1024) buf = '';
       } catch { /* ignore */ }
     });
     conn.on('close', () => {

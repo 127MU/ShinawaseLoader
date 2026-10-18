@@ -6,7 +6,7 @@
 // ECHO.exe FileVersion is the app stamp, not an Electron target.
 
 const { createServer } = require('node:http');
-const { existsSync, mkdirSync, readFileSync, writeFileSync, appendFileSync, lstatSync } = require('node:fs');
+const { existsSync, mkdirSync, readFileSync, writeFileSync, appendFileSync, lstatSync, statSync } = require('node:fs');
 const { dirname, extname, join, normalize, relative, resolve } = require('node:path');
 const { createRequire } = require('node:module');
 const { pathToFileURL } = require('node:url');
@@ -148,10 +148,14 @@ const packageFile = (record, relativePath) => {
 
 // resolveOverlay sits on the hooked fs.* fast path for the whole main process,
 // so the match variants are precomputed per overlay and the incoming path is
-// normalized exactly once per call.
-const applyOverlay = (virtualPath, realPath) => {
+// normalized exactly once per call. Each overlay remembers its package, so a
+// package that is restarted alone drops only its own overlays.
+const applyOverlay = (virtualPath, realPath, owner) => {
   const clean = normalize(virtualPath).replaceAll('\\', '/');
-  overlays.set(clean, { realPath, suffix: clean, asarPath: `/app.asar/${clean}` });
+  overlays.set(clean, { realPath, suffix: clean, asarPath: `/app.asar/${clean}`, owner });
+};
+const dropOverlays = (owner) => {
+  for (const [key, entry] of overlays) if (entry.owner === owner) overlays.delete(key);
 };
 
 const resolveOverlay = (input) => {
@@ -234,7 +238,7 @@ const createPackageHost = (record) => {
     hookIpc,
     overlay: {
       file(virtualPath, sourcePath) {
-        applyOverlay(virtualPath, packageFile(record, sourcePath));
+        applyOverlay(virtualPath, packageFile(record, sourcePath), record.id);
         installFsOverlay();
       },
     },
@@ -265,6 +269,36 @@ const createPackageHost = (record) => {
     },
   };
   return host;
+};
+
+// Load a CommonJS file anew. A throwaway require is used so the parent module
+// that records the child is dropped after the call; requiring through the
+// long-lived hostRequire kept every reloaded copy alive in its children list.
+const freshRequire = (file) => {
+  delete hostRequire.cache[file];
+  return createRequire(file)(file);
+};
+
+const fileStamp = (record, relativePath) => {
+  try {
+    const stats = statSync(packageFile(record, relativePath));
+    return `${stats.size}:${stats.mtimeMs}`;
+  } catch {
+    return 'missing';
+  }
+};
+// What a running package depends on. A changedOnly reload (sent by the Loader
+// on install, uninstall, enable, and disable) restarts only packages whose
+// manifest, config, or declared entry files changed, so toggling one package
+// no longer restarts every main script (and re-imports every .mjs main, which
+// Node can never unload). A plain reload still restarts everything.
+const packageSignature = (record) => {
+  const manifest = record.manifest || {};
+  const native = manifest.native && typeof manifest.native === 'object' ? manifest.native : {};
+  const files = [manifest.main, native.main, native.entry, manifest.nativeShell, manifest.content?.entry,
+    ...(Array.isArray(native.modules) ? native.modules.map((spec) => spec?.entry) : [])]
+    .filter((value, index, all) => typeof value === 'string' && value && all.indexOf(value) === index);
+  return JSON.stringify([record.kind, record.directory, manifest, record.config, files.map((file) => [file, fileStamp(record, file)])]);
 };
 
 const loadNodeAddon = (record, entry) => {
@@ -355,8 +389,7 @@ const activatePackage = async (record) => {
   let timedOut = false;
   if (shellSpec) {
     const shellHost = join(loaderRoot, 'native-shell-host.cjs');
-    delete hostRequire.cache[shellHost];
-    const activate = hostRequire(shellHost);
+    const activate = freshRequire(shellHost);
     const pending = activate(host, shellSpec);
     blockedMs = performance.now() - startedAt;
     ({ dispose: loaded.dispose, timedOut } = await settleActivation(record, host, pending));
@@ -365,7 +398,7 @@ const activatePackage = async (record) => {
     const esm = extname(file).toLowerCase() === '.mjs';
     const imported = esm
       ? await import(`${pathToFileURL(file).href}?t=${Date.now()}`)
-      : (delete hostRequire.cache[file], hostRequire(file));
+      : freshRequire(file);
     // An ES module import yields between evaluation and this point, so only its
     // activate() call counts; a CommonJS require blocks for its whole load.
     const syncFrom = esm ? performance.now() : startedAt;
@@ -384,7 +417,7 @@ const activatePackage = async (record) => {
     else if (kind === 'host-dll') loaded.dlls.push({ spec, handle: loadHostDll(record, spec) });
     else throw new Error(`native_kind_unsupported:${kind}`);
   }
-  packages.set(record.id, { record, ...loaded });
+  packages.set(record.id, { record, signature: packageSignature(record), ...loaded });
   const totalMs = Math.round(performance.now() - startedAt);
   log('INFO', `activated native package ${record.id} main=${Boolean(mainEntry)} modules=${modules.length} blocked=${Math.round(blockedMs)}ms total=${totalMs}ms${timedOut ? ' timedOut=true' : ''}`);
   if (blockedMs >= slowActivationMs) {
@@ -402,15 +435,31 @@ const deactivatePackage = async (id) => {
     try { addon?.unload?.(item.handle); } catch {}
     try { item.handle?.lib?.unload?.(); } catch {}
   }
+  dropOverlays(id);
   packages.delete(id);
 };
 
-const reloadPackagesUnsafe = async () => {
-  for (const id of [...packages.keys()]) await deactivatePackage(id);
-  overlays.clear();
-  if (!nativeEnabled) return { enabled: false, packages: [] };
+const reloadPackagesUnsafe = async (options = {}) => {
+  if (!nativeEnabled) {
+    for (const id of [...packages.keys()]) await deactivatePackage(id);
+    overlays.clear();
+    return { enabled: false, packages: [] };
+  }
+  const changedOnly = options.changedOnly === true;
+  const records = listInstalled();
+  const wanted = new Map(records.map((record) => [record.id, record]));
+  const kept = new Set();
+  for (const [id, entry] of [...packages]) {
+    const next = wanted.get(id);
+    if (changedOnly && next && entry.signature === packageSignature(next)) {
+      kept.add(id);
+      continue;
+    }
+    await deactivatePackage(id);
+  }
   const errors = [];
-  for (const record of listInstalled()) {
+  for (const record of records) {
+    if (kept.has(record.id)) continue;
     try { await activatePackage(record); } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       errors.push({ id: record.id, error: message });
@@ -424,13 +473,14 @@ const reloadPackagesUnsafe = async () => {
     addon: Boolean(addon),
     koffi: Boolean(koffi),
     packages: [...packages.keys()],
+    kept: [...kept],
     errors,
   };
 };
 
 let reloadChain = Promise.resolve();
-const reloadPackages = () => {
-  const run = reloadChain.then(reloadPackagesUnsafe, reloadPackagesUnsafe);
+const reloadPackages = (options) => {
+  const run = reloadChain.then(() => reloadPackagesUnsafe(options), () => reloadPackagesUnsafe(options));
   reloadChain = run.then(() => undefined, () => undefined);
   return run;
 };
@@ -462,7 +512,7 @@ const callNative = async (body) => {
       modules: nativeModules(),
     };
   }
-  if (method === 'reload') return { ok: true, ...(await reloadPackages()) };
+  if (method === 'reload') return { ok: true, ...(await reloadPackages({ changedOnly: payload.changedOnly === true })) };
   if (method === 'modules') return { ok: true, modules: nativeModules() };
   if (method === 'invoke' || method === 'main.invoke') {
     if (!packageId) throw new Error('native_package_required');
@@ -516,7 +566,7 @@ const startServer = () => {
         const chunks = [];
         for await (const chunk of request) chunks.push(chunk);
         const body = chunks.length ? JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}') : {};
-        if (url.pathname === '/reload') return jsonResponse(response, 200, await callNative({ method: 'reload' }));
+        if (url.pathname === '/reload') return jsonResponse(response, 200, await callNative({ method: 'reload', payload: { changedOnly: body?.changedOnly === true } }));
         return jsonResponse(response, 200, await callNative(body));
       }
       jsonResponse(response, 404, { error: 'not_found' });

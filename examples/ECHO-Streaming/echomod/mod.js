@@ -3421,7 +3421,13 @@ const installNativePlaylistImport = () => {
   const lucideSvg = (size, paths) => `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${paths}</svg>`;
   const cloudDownIcon = (size) => lucideSvg(size, '<path d="M4.393 15.269A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.436 8.284"/><path d="M12 12v9"/><path d="m8 17 4 4 4-4"/>');
   const closeIcon = (size) => lucideSvg(size, '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>');
-  const removeForms = () => { for (const node of document.querySelectorAll(`form[${marker}]`)) node.remove(); };
+  // 26.10.8+ playlist home: creating opens a floating card instead of a form
+  // under the header, so the streaming import mirrors that card.
+  const popoverMarker = 'data-echo-streaming-import-popover';
+  const removeForms = () => { for (const node of document.querySelectorAll(`form[${marker}], [${popoverMarker}]`)) node.remove(); };
+  // Detail pages of the playlist wall have no playlist rail; importing lives on
+  // the collection home there, so the detail header gets no import button.
+  const isWallDetailHeader = (header) => Boolean(header?.matches('.playlist-detail-header') && header.closest('.playlists-page--wall-detail'));
   const importStyleId = 'echo-streaming-playlist-import-style';
   const ensureImportStyle = () => {
     if (document.getElementById(importStyleId)) return;
@@ -3452,13 +3458,101 @@ const installNativePlaylistImport = () => {
       .playlist-collection-home > .echo-streaming-import-form { display: flex; justify-self: end; width: auto; max-width: min(100%, 560px); }
       .collection-playlist-sidebar .echo-streaming-import-form,
       .playlist-sidebar .echo-streaming-import-form { margin: 4px 6px 8px; min-width: 0; }
+      .playlists-page--home > [${popoverMarker}] {
+        position: absolute; top: 64px; right: 32px; z-index: 2; box-sizing: border-box; width: min(320px, calc(100% - 36px));
+        padding: 16px; border: 1px solid var(--theme-panel-border); border-radius: 8px; background: var(--theme-panel-bg-strong);
+      }
+      [${popoverMarker}] > .collection-playlist-create { padding: 0; border-top: 0; }
+      .playlist-collection-home > [${dailyMarker}] { margin: 0; padding: 0; border-top: 0; max-height: none; overflow: visible; }
+      .playlist-collection-home > [${dailyMarker}] .echo-streaming-daily-native-head { grid-template-columns: 28px minmax(0, max-content) 34px; }
+      .playlist-collection-home > [${dailyMarker}] .echo-streaming-daily-native-head strong { font-size: 13px; }
+      .playlist-collection-home > [${dailyMarker}] .echo-streaming-daily-module-list { grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 4px 12px; max-height: none; overflow: visible; }
     `;
     document.head.append(style);
   };
   // Home uses the official compact create card (right-aligned, 320px input).
   // The old playlist-create-form is a 1fr grid and stretches the whole page
   // when inserted under .playlist-home-header.
+  const submitImport = async (input, onDone) => {
+    const url = input.value.trim();
+    if (!url || input.disabled) return;
+    const stream = streamApi();
+    if (!stream?.importPlaylistFromUrl) {
+      log('importPlaylistFromUrl missing; streaming bridge is not exposed on this page');
+      showChromeNotice(copy.noBridge);
+      return;
+    }
+    input.disabled = true;
+    try {
+      const imported = await stream.importPlaylistFromUrl(url);
+      onDone();
+      await openImportedPlaylist(imported);
+      showChromeNotice(copy.imported(imported.playlistName, imported.importedCount));
+    } catch (error) {
+      input.disabled = false;
+      showChromeNotice(error instanceof Error ? error.message : String(error));
+      throw error;
+    }
+  };
+  // Same card, form and tool buttons as ECHO's own "new playlist" card, so it
+  // follows the theme; ECHO's card and this one never show at the same time.
+  const openPopover = (page) => {
+    const existing = page.querySelector(`:scope > [${popoverMarker}]`);
+    removeForms();
+    if (existing) return;
+    if (page.dataset.creating === 'true') page.querySelector(':scope > .collection-playlist-sidebar .collection-playlist-create form button[type="button"]')?.click();
+    ensureImportStyle();
+    const card = document.createElement('div');
+    card.setAttribute(popoverMarker, 'true');
+    card.setAttribute('role', 'dialog');
+    card.setAttribute('aria-label', copy.addPlaylist);
+    const wrap = document.createElement('div');
+    wrap.className = 'collection-playlist-create';
+    const form = document.createElement('form');
+    form.setAttribute(marker, 'true');
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.placeholder = copy.playlistPlaceholderShort;
+    input.setAttribute('aria-label', copy.addPlaylist);
+    input.autocomplete = 'off';
+    input.spellcheck = false;
+    const submit = document.createElement('button');
+    submit.type = 'submit';
+    submit.className = 'tool-button';
+    submit.disabled = true;
+    submit.title = copy.add;
+    submit.setAttribute('aria-label', copy.add);
+    submit.innerHTML = cloudDownIcon(16);
+    const cancel = document.createElement('button');
+    cancel.type = 'button';
+    cancel.className = 'tool-button';
+    cancel.title = copy.cancelImport;
+    cancel.setAttribute('aria-label', copy.cancelImport);
+    cancel.innerHTML = closeIcon(16);
+    cancel.addEventListener('click', () => card.remove());
+    input.addEventListener('input', () => { submit.disabled = !input.value.trim(); });
+    input.addEventListener('keydown', (event) => { if (event.key === 'Escape') card.remove(); });
+    form.addEventListener('submit', (event) => {
+      event.preventDefault();
+      submit.disabled = true;
+      submit.title = copy.adding;
+      void submitImport(input, () => card.remove()).catch(() => {
+        submit.disabled = !input.value.trim();
+        submit.title = copy.add;
+      });
+    });
+    form.append(input, submit, cancel);
+    wrap.append(form);
+    card.append(wrap);
+    page.append(card);
+    input.focus();
+  };
   const openForm = (header) => {
+    const homePage = header.closest('.playlists-page--home');
+    if (homePage && header.matches('.playlist-overview-header')) {
+      openPopover(homePage);
+      return;
+    }
     const existing = header.parentElement?.querySelector(`form[${marker}]`);
     removeForms();
     if (existing) return;
@@ -3618,6 +3712,12 @@ const installNativePlaylistImport = () => {
   const findSidebar = () => {
     const surface = livePlaylistsSurface();
     if (!surface || !isNativeChrome(surface)) return null;
+    // 26.10.8+ wall layout: no playlist rail (the sidebar only renders as the
+    // "new playlist" card). Daily playlists sit on the collection home instead,
+    // and wall detail pages get none.
+    const page = surface.querySelector('.playlists-page');
+    if (page?.matches('.playlists-page--home')) return page.querySelector(':scope > .playlist-collection-home');
+    if (page?.matches('.playlists-page--wall-detail')) return null;
     return surface.querySelector('aside.collection-playlist-sidebar, .collection-playlist-sidebar, aside.playlist-sidebar, .playlist-sidebar')
       || surface.querySelector('.playlist-collection-home')
       || null;
@@ -3754,7 +3854,12 @@ const installNativePlaylistImport = () => {
       host.className = 'echo-streaming-daily-native';
       host.setAttribute(dailyMarker, 'true');
     }
-    if (host.parentElement !== sidebar || sidebar.lastElementChild !== host) sidebar.append(host);
+    // On the collection home it goes between the header and the playlist wall;
+    // in a playlist rail it is the last block.
+    const anchor = sidebar.matches('.playlist-collection-home') ? sidebar.querySelector(':scope > .playlist-library') : null;
+    if (anchor) {
+      if (host.parentElement !== sidebar || host.nextElementSibling !== anchor) sidebar.insertBefore(host, anchor);
+    } else if (host.parentElement !== sidebar || sidebar.lastElementChild !== host) sidebar.append(host);
     bindNativeDailyHost(host);
     if (host.dataset.signature !== dailySignature()) renderNativeDaily(host);
     else host.dataset.collapsed = String(state.dailySidebarCollapsed === true);
@@ -3797,11 +3902,15 @@ const installNativePlaylistImport = () => {
   };
   const mount = () => {
     ensureImportStyle();
-    for (const node of document.querySelectorAll(`[${buttonMarker}], form[${marker}], form[${linkMarker}], [${dailyMarker}]`)) {
+    for (const node of document.querySelectorAll(`[${buttonMarker}], form[${marker}], form[${linkMarker}], [${dailyMarker}], [${popoverMarker}]`)) {
       if (!isLivePage(node)) node.remove();
     }
     const surface = livePlaylistsSurface();
     if (!surface || !isNativeChrome(surface)) return false;
+    // ECHO's own "new playlist" card opened: close ours so the two never stack.
+    if (surface.querySelector('.playlists-page[data-creating="true"]')) {
+      for (const node of surface.querySelectorAll(`[${popoverMarker}]`)) node.remove();
+    }
     const header = findHeader();
     if (!header) {
       miss('native playlists header missing on the visible playlists route');
@@ -3809,7 +3918,9 @@ const installNativePlaylistImport = () => {
     }
     loggedMiss = false;
     const actions = header.querySelector('.playlist-overview-actions, .playlist-detail-primary-actions, .playlist-actions') || header;
-    if (!actions.querySelector(`[${buttonMarker}]`)) {
+    if (isWallDetailHeader(header)) {
+      for (const node of actions.querySelectorAll(`[${buttonMarker}]`)) node.remove();
+    } else if (!actions.querySelector(`[${buttonMarker}]`)) {
       const button = document.createElement('button');
       button.type = 'button';
       button.className = 'tool-button';
@@ -3836,7 +3947,8 @@ const installNativePlaylistImport = () => {
     mountDaily();
     mountDailyDetail();
     const sidebar = findSidebar();
-    if (sidebar?.matches('.collection-playlist-sidebar, .playlist-sidebar')) ensureLinkRow(sidebar);
+    // Only a rail that is actually shown gets the link row.
+    if (sidebar?.matches('.collection-playlist-sidebar, .playlist-sidebar') && sidebar.getClientRects().length) ensureLinkRow(sidebar);
     return true;
   };
   let mountTimer = 0;
@@ -3871,7 +3983,7 @@ const installNativePlaylistImport = () => {
     window.clearTimeout(mountTimer);
     window.clearInterval(poll);
     paintNativeDailyPanel = () => {};
-    for (const node of document.querySelectorAll(`[${buttonMarker}], form[${marker}], form[${linkMarker}], [${dailyMarker}], [${dailyDetailMarker}]`)) node.remove();
+    for (const node of document.querySelectorAll(`[${buttonMarker}], form[${marker}], form[${linkMarker}], [${dailyMarker}], [${dailyDetailMarker}], [${popoverMarker}]`)) node.remove();
     document.getElementById(dailyStyleId)?.remove();
     document.getElementById(importStyleId)?.remove();
   };

@@ -6,12 +6,14 @@ using System.Text;
 
 internal static class EchoModdedHost
 {
-    // echo-steam current Steam host / AppId 5105150. Launch the isolated copy at
+    // echo-steam current Steam host / AppId 5105090. Launch the isolated copy at
     // ShinawaseLoader\modded-runtime\ECHO.exe — never the Steam original, and
-    // never a hardlink of that exe (Electron 43.3 embeds the asar header hash).
+    // never a hardlink of that exe (Electron 43 embeds the asar header hash).
     // userData is %APPDATA%\ECHO Steam unless ECHO_USER_DATA_PATH_OVERRIDE is set.
     // Steam updates replace the stock asar/exe; sync the isolated runtime first.
-    private const string SteamAppId = "5105150";
+    // ECHO's Steam AppId (5105150 is ECHO Playtest). Steam passes the same
+    // value when it launches this host; keep it for the isolated child.
+    private const string SteamAppId = "5105090";
 
     private static string Quote(string value)
     {
@@ -146,6 +148,8 @@ internal static class EchoModdedHost
         }
 
         bool acquired;
+        // The mutex name predates the AppId fix; keep it so hosts from older
+        // Loaders and this one still see each other as the same instance.
         using (var mutex = new System.Threading.Mutex(true, "Local\\ECHO-Modded-5105150", out acquired))
         {
             if (!acquired)

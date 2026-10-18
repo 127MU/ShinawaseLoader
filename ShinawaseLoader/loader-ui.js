@@ -1,6 +1,6 @@
 // Keep this guard in sync with window.__echoExternalLoaderUi.version
-// and ShinawaseLoader.mjs (uiVersion < 65).
-if (window.__echoExternalLoaderUi?.version >= 65) return 'already';
+// and ShinawaseLoader.mjs (uiVersion < 66).
+if (window.__echoExternalLoaderUi?.version >= 66) return 'already';
 window.__echoExternalLoaderUi?.dispose?.();
 
 const base = 'http://127.0.0.1:' + LOADER_PORT;
@@ -205,6 +205,8 @@ const applyTint = (host, seed, iconSrc) => {
       if (w < 0.25) return;
       const color = 'rgb(' + Math.round(r / w) + ' ' + Math.round(g / w) + ' ' + Math.round(b / w) + ')';
       tintCache.set(iconSrc, color);
+      // Keys are whole data URLs; bound the cache so icon updates cannot pile up.
+      while (tintCache.size > 96) tintCache.delete(tintCache.keys().next().value);
       if (host.isConnected) host.style.setProperty('--tint', color);
     } catch { /* remote icons taint the canvas; keep the hashed colour */ }
   };
@@ -3239,6 +3241,9 @@ const runDebugCommand = async (command) => {
 const rebuildUi = async () => {
   const showMods = Boolean(modsPanel && !modsPanel.hidden);
   const showMarket = Boolean(marketPanel && !marketPanel.hidden);
+  // The shared ResizeObserver keeps observed targets (and so the whole removed
+  // panel) alive; release them before the panels are rebuilt.
+  [loaderPanel, modsPanel, marketPanel].forEach((panel) => panel?.querySelectorAll('[data-seg]').forEach((seg) => segObserver?.unobserve(seg)));
   loaderPanel?.remove();
   modsPanel?.remove();
   marketPanel?.remove();
@@ -5780,7 +5785,7 @@ const onNavControlClick = (event) => {
 window.addEventListener('click', onNavControlClick, true);
 
 window.__echoExternalLoaderUi = {
-  version: 65,
+  version: 66,
   registerSidebar,
   unregisterSidebar: removeSidebar,
   uiSettings: () => ({ ...uiSettings }),

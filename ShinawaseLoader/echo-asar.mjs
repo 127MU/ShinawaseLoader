@@ -14,7 +14,8 @@ const splashMarker = '/* shinawase-loader-startup-splash-v1 */';
 // Bump when the blocks injected into the main entry change, so runtime-sync
 // rebuilds isolated runtimes that were patched by an older Loader.
 // 2: startup splash block.
-const PATCH_REVISION = 3;
+// 4: preload bridge carries its own channel table; generic topmost deferral.
+const PATCH_REVISION = 4;
 const MAIN_ENTRY = 'out/main/index.js';
 const PRELOAD_ENTRY = 'out/preload/index.mjs';
 const STEAM_STREAMING_REJECT = 'Music streaming playback is not available in the Steam distribution.';
@@ -22,11 +23,15 @@ const KNOWN_STOCK_ASAR_SHA256 = {
   '26.8.28': 'c59648731aea7f109317c26a9181bb6626b9c9e7f130998c2577a99e9ccae2c0',
   '26.9.1': 'f245fd7683542bfd9f9e12fc628149bd04029819b6d2611ca274a1d7655545b6',
   '26.9.16': '137b81875ac1f1c4735b2014b478ef27aaf7fb3fca9d6401ff0a218cc71f9271',
+  '26.10.16': 'e4200ed73b003dd6631bda8e892d55ff08c8252cd7b8d90239e29620886001fc',
+  '26.10.18': 'e2e4c118bc2ed3c6892d1c9013ae5788cd375df0dcda27eae9e0747930028ec9',
 };
 const KNOWN_STOCK_HEADER_SHA256 = {
   '26.8.28': 'b525231cec180d1ab15334ab8c2063400f222606eb43b9dc0c903b0d568cbfdd',
   '26.9.1': '8f685506c8b2ca9165e1ebd0a4c31385438e4bdeb41568cced2ce819a09cba1d',
   '26.9.16': '5467723cc48791eac83ab03456570ad3e021847eb2d3bb8bc1ca4e00b7137bdc',
+  '26.10.16': '6ccbc9f4fdc9bf2271ed501eb8958909778959b4d81ddb0d16c8e132cb787f4e',
+  '26.10.18': '2c5bdf76a220b4fd60453a9e8dd2aa6922dda6b9d6c79daad29d38ae4b196d66',
 };
 const knownAsarHashes = new Set(Object.values(KNOWN_STOCK_ASAR_SHA256));
 const knownHeaderHashes = new Set(Object.values(KNOWN_STOCK_HEADER_SHA256));
@@ -401,10 +406,72 @@ const splashBridge = `${splashMarker}
 })();
 `;
 
+// Channel names the streaming bridge registers in the main process. The
+// shipped preload's IpcChannels table lost these keys when ECHO retired the
+// platform streaming surfaces (26.10.8+; the Steam build strips them from
+// out/preload/ipcChannels-*.mjs), so the preload bridge carries its own copy
+// instead of reading ECHO's. Same strings as streaming-preload.cjs.
+const BRIDGE_IPC_CHANNELS = Object.freeze({
+  StreamingSearch: 'streaming:search',
+  StreamingGetTrack: 'streaming:getTrack',
+  StreamingGetTrackSourceInfo: 'streaming:getTrackSourceInfo',
+  StreamingGetAlbum: 'streaming:getAlbum',
+  StreamingGetArtist: 'streaming:getArtist',
+  StreamingResolvePlayback: 'streaming:resolvePlayback',
+  StreamingResolveLive: 'streaming:resolveLive',
+  StreamingAnalyzeBpm: 'streaming:analyzeBpm',
+  StreamingGetLyrics: 'streaming:getLyrics',
+  StreamingGetMv: 'streaming:getMv',
+  StreamingGetProviders: 'streaming:getProviders',
+  StreamingListAccountPlaylists: 'streaming:listAccountPlaylists',
+  StreamingImportPlaylistFromUrl: 'streaming:importPlaylistFromUrl',
+  StreamingImportFavoritesFromUrl: 'streaming:importFavoritesFromUrl',
+  StreamingExportFavorites: 'streaming:exportFavorites',
+  StreamingSyncLikedSongs: 'streaming:syncLikedSongs',
+  StreamingSetTrackLiked: 'streaming:setTrackLiked',
+  StreamingGetFavorites: 'streaming:getFavorites',
+  StreamingSetFavorite: 'streaming:setFavorite',
+  StreamingRenameFavoriteCollection: 'streaming:renameFavoriteCollection',
+  StreamingSyncFavoriteCollection: 'streaming:syncFavoriteCollection',
+  StreamingDeleteFavoriteCollection: 'streaming:deleteFavoriteCollection',
+  StreamingRefreshNeteaseDailyRecommend: 'streaming:refreshNeteaseDailyRecommend',
+  AccountGetStatuses: 'account:get-statuses',
+  AccountGetStatus: 'account:get-status',
+  AccountSaveCookie: 'account:save-cookie',
+  AccountStartLogin: 'account:start-login',
+  AccountStartNeteaseQrLogin: 'account:start-netease-qr-login',
+  AccountPollNeteaseQrLogin: 'account:poll-netease-qr-login',
+  AccountClear: 'account:clear',
+  AccountCheck: 'account:check',
+  AccountCheckAll: 'account:check-all',
+  AccountSetBrowser: 'account:set-browser',
+  AccountSetYouTubeBrowser: 'account:set-youtube-browser',
+  AccountStatusesChanged: 'account:statuses-changed',
+  DownloadsGetJobs: 'downloads:get-jobs',
+  DownloadsCreateUrlJob: 'downloads:create-url-job',
+  DownloadsCancelJob: 'downloads:cancel-job',
+  DownloadsClearJobs: 'downloads:clear-jobs',
+  DownloadsClearCompleted: 'downloads:clear-completed',
+  DownloadsGetSettings: 'downloads:get-settings',
+  DownloadsSetSettings: 'downloads:set-settings',
+  DownloadsChooseOutputDirectory: 'downloads:choose-output-directory',
+  DownloadsSearch: 'downloads:search',
+  DownloadsGetOsuAccountProfile: 'downloads:get-osu-account-profile',
+  DownloadsGetOsuAccountCollection: 'downloads:get-osu-account-collection',
+  DownloadsCheckTools: 'downloads:check-tools',
+  DownloadsJobsUpdated: 'downloads:jobs-updated',
+  QobuzAuthLogin: 'qobuz:auth:login',
+  QobuzAuthLogout: 'qobuz:auth:logout',
+  QobuzAuthGetStatus: 'qobuz:auth:get-status',
+  QobuzAuthStatusChanged: 'qobuz:auth:status-changed',
+  QobuzDownloadAlbum: 'qobuz:download-album',
+});
+
 // The Steam preload intentionally leaves these namespaces empty. The community
 // streaming Mod still needs the existing main-process IPC service, so expose
 // only its typed method surface without restoring ECHO's native pages.
 const preloadBridge = `${preloadMarker}
+const shinawaseIpcChannels = ${JSON.stringify(BRIDGE_IPC_CHANNELS)};
 const createShinawaseStreamingApi = (ipc, channels) => ({
   search: (request) => ipc.invoke(channels.StreamingSearch, request),
   getTrack: (request) => ipc.invoke(channels.StreamingGetTrack, request),
@@ -496,10 +563,10 @@ const createShinawaseQobuzApi = (ipc, channels) => ({
 // case a rebuild keeps the literal head on one line.
 const echoApiOpenRe = /^([ \t]*)const echoApi = \{/mu;
 const preloadApiNames = {
-  streaming: 'createShinawaseStreamingApi(ipcRenderer, IpcChannels)',
-  downloads: 'createShinawaseDownloadsApi(ipcRenderer, IpcChannels)',
-  qobuz: 'createShinawaseQobuzApi(ipcRenderer, IpcChannels)',
-  accounts: 'createShinawaseAccountsApi(ipcRenderer, IpcChannels)',
+  streaming: 'createShinawaseStreamingApi(ipcRenderer, shinawaseIpcChannels)',
+  downloads: 'createShinawaseDownloadsApi(ipcRenderer, shinawaseIpcChannels)',
+  qobuz: 'createShinawaseQobuzApi(ipcRenderer, shinawaseIpcChannels)',
+  accounts: 'createShinawaseAccountsApi(ipcRenderer, shinawaseIpcChannels)',
 };
 const preloadStubTriple = (text) => ['streaming: null,', 'downloads: null,', 'accounts: null,']
   .every((stub) => text.includes(stub));
@@ -547,8 +614,33 @@ const applyStreamingQualityPassthrough = (text) => {
 // 26.9.16 (Electron 43.5) still constructs the mini-player with alwaysOnTop:
 // true and the apply* helpers still raise immediately on win32. Keep the 600ms
 // deferral.
+// 26.10.x builds rename the helpers' parameter (window -> window2) and reshape
+// their bodies (menu guard, topmost level), so the exact rewrites below stop
+// matching. Any helper still unwrapped is wrapped whole instead: a window's
+// first raise starts its 600ms window, and raises inside it are deferred.
+const deferTopmostMarker = '/* shinawase-defer-topmost */';
+const topmostHelperRe = /^const (applyPetAlwaysOnTop|applyMiniPlayerAlwaysOnTop|applyDesktopLyricsAlwaysOnTop) = (\([^\n]*\) => \{\n[\s\S]*?\n\});$/gmu;
+const wrapTopmostHelper = (name, fn) => `const ${name} = ${deferTopmostMarker} ((apply) => {
+  const bornAt = new WeakMap();
+  return (window, ...rest) => {
+    if (!window || typeof window.isDestroyed !== "function") return apply(window, ...rest);
+    if (!bornAt.has(window)) bornAt.set(window, Date.now());
+    const delay = Math.max(0, 600 - (Date.now() - bornAt.get(window)));
+    if (delay === 0) return apply(window, ...rest);
+    setTimeout(() => { if (!window.isDestroyed()) apply(window, ...rest); }, delay);
+  };
+})(${fn});`;
+const wrapTopmostHelpers = (text) => {
+  topmostHelperRe.lastIndex = 0;
+  return text.replace(topmostHelperRe, (whole, name, fn) => (fn.includes('__shinawaseBornAt') ? whole : wrapTopmostHelper(name, fn)));
+};
+const countTopmostHelpers = (text) => {
+  topmostHelperRe.lastIndex = 0;
+  return [...text.matchAll(topmostHelperRe)].length;
+};
+
 const applyAuxiliaryWindowCrashFix = (text) => {
-  if (text.includes('__shinawaseBornAt')) return text;
+  if (text.includes('__shinawaseBornAt') || text.includes(deferTopmostMarker)) return text;
   let next = text;
   const currentCtor = '    skipTaskbar: true,\n    show: false,\n    // Ordinary topmost from the first frame (same floating level the runtime\n    // applyMiniPlayerAlwaysOnTop uses); some Linux window managers only honor\n    // the above-state reliably when it is set before the window is mapped.\n    alwaysOnTop: true,\n    webPreferences: {';
   const currentSafe = currentCtor.replace('alwaysOnTop: true', 'alwaysOnTop: false');
@@ -600,7 +692,7 @@ const applyAuxiliaryWindowCrashFix = (text) => {
   for (const [from, to] of helpers) {
     if (next.includes(from)) next = next.replace(from, to);
   }
-  return next;
+  return wrapTopmostHelpers(next);
 };
 
 const steamStreamingValidation = (providerName) => `if (${providerName} !== "m3u8" || !/^https?:\\/\\/\\S+$/iu.test(radioUrl)) {\n      throw new Error("${STEAM_STREAMING_REJECT}");\n    }`;
@@ -736,10 +828,16 @@ const playlistProviderFilterRe = /\.filter\(([A-Za-z_$][\w$]*)=>\1\.sourceProvid
 const steamItemToTrackRe = /(?<binding>[A-Za-z_$][\w$]*)=(?<wrap>[A-Za-z_$][\w$]*)\((?<item>[A-Za-z_$][\w$]*)=>\k<item>\.track\?\{\.\.\.\k<item>\.track,playlistItemId:\k<item>\.id,unavailable:\k<item>\.unavailable\|\|\k<item>\.track\.unavailable\}:\{id:\k<item>\.mediaId\?\?\k<item>\.id,path:"",title:\k<item>\.titleSnapshot\?\?"Unavailable track",artist:\k<item>\.artistSnapshot\?\?"Unknown artist",album:\k<item>\.albumSnapshot\?\?"",albumArtist:\k<item>\.artistSnapshot\?\?"",trackNo:null,discNo:null,year:null,genre:null,duration:\k<item>\.durationSnapshot\?\?0,codec:null,sampleRate:null,bitDepth:null,bitrate:null,coverId:\k<item>\.coverId,coverThumb:\k<item>\.coverThumb,fieldSources:\{\},playlistItemId:\k<item>\.id,unavailable:!0\},"itemToTrack"\)/gu;
 const steamItemToTrackReplacement = '$<binding>=$<wrap>($<item>=>{if($<item>.mediaType==="stream_track"&&$<item>.mediaId&&$<item>.sourceItemId&&!$<item>.unavailable){const $<item>t=$<item>.track??null;return{id:$<item>.mediaId,mediaType:"streaming",path:$<item>.mediaId,provider:$<item>.sourceProvider,providerTrackId:$<item>.sourceItemId,streamingQuality:$<item>t?.streamingQuality,stableKey:$<item>t?.stableKey??$<item>.mediaId,title:$<item>t?.title??$<item>.titleSnapshot??"Streaming track",artist:$<item>t?.artist??$<item>.artistSnapshot??"Unknown artist",album:$<item>t?.album??$<item>.albumSnapshot??"",albumArtist:$<item>t?.albumArtist??$<item>.artistSnapshot??"",trackNo:$<item>t?.trackNo??null,discNo:$<item>t?.discNo??null,year:$<item>t?.year??null,genre:$<item>t?.genre??null,duration:$<item>t?.duration??$<item>.durationSnapshot??0,codec:$<item>t?.codec??null,sampleRate:$<item>t?.sampleRate??null,bitDepth:$<item>t?.bitDepth??null,bitrate:$<item>t?.bitrate??null,coverId:$<item>t?.coverId??$<item>.coverId,coverThumb:$<item>t?.coverThumb??$<item>.coverThumb,fieldSources:{title:$<item>.sourceProvider,artist:$<item>.sourceProvider,album:$<item>.sourceProvider},playlistItemId:$<item>.id,unavailable:!1}}const $<item>m=typeof $<item>.mediaId==="string"?/^streaming:([a-z0-9_-]+):(.+)$/i.exec($<item>.mediaId):null;if(!$<item>.track&&$<item>m&&!$<item>.unavailable){const $<item>p=$<item>.sourceProvider&&$<item>.sourceProvider!=="local"?$<item>.sourceProvider:$<item>m[1];return{id:$<item>.mediaId,mediaType:"streaming",path:$<item>.mediaId,provider:$<item>p,providerTrackId:$<item>.sourceItemId||$<item>m[2],stableKey:$<item>.mediaId,title:$<item>.titleSnapshot??"Streaming track",artist:$<item>.artistSnapshot??"Unknown artist",album:$<item>.albumSnapshot??"",albumArtist:$<item>.artistSnapshot??"",trackNo:null,discNo:null,year:null,genre:null,duration:$<item>.durationSnapshot??0,codec:null,sampleRate:null,bitDepth:null,bitrate:null,coverId:$<item>.coverId,coverThumb:$<item>.coverThumb,fieldSources:{title:$<item>p,artist:$<item>p,album:$<item>p},playlistItemId:$<item>.id,unavailable:!1}}return $<item>.track?{...$<item>.track,playlistItemId:$<item>.id,unavailable:$<item>.unavailable||$<item>.track.unavailable}:{id:$<item>.mediaId??$<item>.id,path:"",title:$<item>.titleSnapshot??"Unavailable track",artist:$<item>.artistSnapshot??"Unknown artist",album:$<item>.albumSnapshot??"",albumArtist:$<item>.artistSnapshot??"",trackNo:null,discNo:null,year:null,genre:null,duration:$<item>.durationSnapshot??0,codec:null,sampleRate:null,bitDepth:null,bitrate:null,coverId:$<item>.coverId,coverThumb:$<item>.coverThumb,fieldSources:{},playlistItemId:$<item>.id,unavailable:!0}},"itemToTrack")';
 
+// 26.10.x LikedPage picks add-to-playlist targets with a named predicate that
+// also excludes smart playlists; drop only its local-provider condition.
+const addTargetPredicateRe = /([A-Za-z_$][\w$]*)=>\1\.sourceProvider==="local"&&\1\.kind!=="system"&&\1\.kind!=="smart"/gu;
+
 const patchSteamPlaylistsPage = (text) => {
   playlistProviderFilterRe.lastIndex = 0;
   steamItemToTrackRe.lastIndex = 0;
+  addTargetPredicateRe.lastIndex = 0;
   let next = text.replace(playlistProviderFilterRe, '.filter($1=>$1.kind!=="system")');
+  next = next.replace(addTargetPredicateRe, '$1=>$1.kind!=="system"&&$1.kind!=="smart"');
   next = next.replace(steamItemToTrackRe, steamItemToTrackReplacement);
   return next;
 };
@@ -865,9 +963,12 @@ const verifyAnchors = (root) => {
     preloadApiAnchor: preloadStubTriple(preloadText) || Boolean(findEchoApiOpen(preloadText)),
     playlistFilter: playlistHits.some((item) => item.filterMatches.length),
     aotMiniPlayerCtor: mainText.includes(aotCurrentCtor) || mainText.includes(aotOverlayCtor),
-    aotPetHelper: mainText.includes(aotCurrentPet) || mainText.includes(aotWin32Pet),
+    // Exact helper bodies with a birth stamp at window creation (<= 26.9.x), or
+    // all three helpers in the shape the generic wrapper takes (26.10.x).
+    aotPetHelper: mainText.includes(aotCurrentPet) || mainText.includes(aotWin32Pet) || countTopmostHelpers(mainText) === 3,
     aotBirthStamp: ['petWindow = window;', 'miniPlayerWindow = window;']
-      .every((assignment) => mainText.includes(`  ${assignment}\n  window.setMenuBarVisibility(false);`)),
+      .every((assignment) => mainText.includes(`  ${assignment}\n  window.setMenuBarVisibility(false);`))
+      || countTopmostHelpers(mainText) === 3,
     playbackChannels: ['playback:play-media-item', 'playback:resolve-media-item', 'playback:prepare-media-item']
       .every((channel) => mainText.includes(channel)),
     mainIntegrity: Boolean(main.info.integrity),
@@ -889,7 +990,7 @@ const verifyAnchors = (root) => {
   };
 };
 
-export { patch, restore, syncIntegrity, verifyAnchors, patchSteamPlaylistsPage, patchPreload, injectSplashBridge, PATCH_REVISION };
+export { patch, restore, syncIntegrity, verifyAnchors, patchSteamPlaylistsPage, patchPreload, injectSplashBridge, applyAuxiliaryWindowCrashFix, PATCH_REVISION };
 
 const isMain = process.argv[1] && resolve(fileURLToPath(import.meta.url)) === resolve(process.argv[1]);
 if (isMain) {

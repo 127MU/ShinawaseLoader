@@ -46,7 +46,34 @@ const writeJson = (file, value) => {
   mkdirSync(dirname(file), { recursive: true });
   writeFileSync(file, `${JSON.stringify(value, null, 2)}\n`, 'utf8');
 };
-const sha256File = (file) => createHash('sha256').update(readFileSync(file)).digest('hex');
+// app.asar is hundreds of MB, so hash it in fixed chunks instead of reading it
+// into one buffer.
+const sha256File = (file) => {
+  const hash = createHash('sha256');
+  const chunk = Buffer.allocUnsafe(4 * 1024 * 1024);
+  const fd = openSync(file, 'r');
+  try {
+    let read;
+    while ((read = readSync(fd, chunk, 0, chunk.length, null)) > 0) hash.update(read === chunk.length ? chunk : chunk.subarray(0, read));
+  } finally { closeSync(fd); }
+  return hash.digest('hex');
+};
+const statKey = (stats) => (stats ? `${stats.size}:${stats.mtimeMs}:${stats.ctimeMs}:${stats.ino}` : 'missing');
+const statFile = (file) => {
+  try { return statSync(file); } catch { return null; }
+};
+// The Loader UI polls /api/status (which fingerprints the stock install) every
+// few seconds. Re-hashing an unchanged archive each time cost a full read of
+// app.asar per poll, so fingerprints are reused until the stat of any input
+// file changes. A Steam update replaces the archive, which changes its stat.
+const fingerprintCache = new Map();
+const cachedFingerprint = (key, compute) => {
+  const hit = fingerprintCache.get(key.id);
+  if (hit && hit.stamp === key.stamp) return { ...hit.value };
+  const value = compute();
+  fingerprintCache.set(key.id, { stamp: key.stamp, value });
+  return { ...value };
+};
 const samePath = (left, right) => pathsEqual(left, right);
 
 const readAsarJson = (archive, relativePath) => {
@@ -141,6 +168,9 @@ const fingerprintStockDarwin = (echoRoot) => {
   if (!app) throw new Error(`stock_echo_missing:${echoRoot}`);
   const asarStat = statSync(app.asar);
   const exeStat = statSync(app.exe);
+  return cachedFingerprint({ id: `darwin:${resolve(echoRoot)}:${app.name}`, stamp: `${statKey(asarStat)}|${statKey(exeStat)}` }, () => fingerprintDarwinFiles(echoRoot, app, asarStat, exeStat));
+};
+const fingerprintDarwinFiles = (echoRoot, app, asarStat, exeStat) => {
   const pkg = readAsarJson(app.asar, 'package.json') || {};
   return {
     echoRoot: resolve(echoRoot),
@@ -199,6 +229,10 @@ export const fingerprintStock = (echoRoot) => {
   const asarStat = statSync(asar);
   // The Linux wrapper script never changes; the Electron binary beside it does.
   const exeStat = statSync(stockBinFor(exe) || exe);
+  const stamp = `${exe}|${statKey(asarStat)}|${statKey(exeStat)}|${statKey(statFile(versionFile))}`;
+  return cachedFingerprint({ id: resolve(echoRoot), stamp }, () => fingerprintFiles(echoRoot, exe, asar, versionFile, asarStat, exeStat));
+};
+const fingerprintFiles = (echoRoot, exe, asar, versionFile, asarStat, exeStat) => {
   const pkg = readAsarJson(asar, 'package.json') || {};
   let electronVersion = null;
   try {

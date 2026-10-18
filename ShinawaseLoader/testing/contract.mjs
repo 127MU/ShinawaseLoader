@@ -62,8 +62,8 @@ export const PLAYER_GLOBAL = '__echoExternalPlayer';
 export const EXTEND_GLOBAL = '__echoExternalExtend';
 
 // Minimum runtime versions the injection cycle expects (ShinawaseLoader.mjs
-// injectEnabled(): uiVersion < 65, playerVersion < 1, extendVersion < 1).
-export const MIN_UI_VERSION = 65;
+// injectEnabled(): uiVersion < 66, playerVersion < 1, extendVersion < 1).
+export const MIN_UI_VERSION = 66;
 export const MIN_PLAYER_VERSION = 1;
 export const MIN_EXTEND_VERSION = 1;
 
@@ -178,8 +178,10 @@ export const DEFAULT_UI_SETTINGS = Object.freeze({
   startupSplash: true,
 });
 
-// SDK.md "echo-steam 26.9.1 alignment": window.echo namespaces observed on the
+// SDK.md "echo-steam 26.10.18 alignment": window.echo namespaces observed on the
 // aligned host. Method shapes are intentionally not frozen (SDK.md tells mods
 // to discover them at runtime), so the harness only guarantees the namespaces
 // plus the two methods the loader itself relies on.
-export const ECHO_NAMESPACES = ['steam', 'workshop', 'app', 'desktopLyrics', 'miniPlayer', 'pet', 'library', 'playback', 'streaming', 'lyrics', 'mv', 'accounts'];
+// ECHO retired its own MV namespace in 26.10.8; streaming and accounts come from
+// the loader's preload bridge.
+export const ECHO_NAMESPACES = ['steam', 'workshop', 'app', 'desktopLyrics', 'miniPlayer', 'pet', 'library', 'playback', 'streaming', 'lyrics', 'accounts'];

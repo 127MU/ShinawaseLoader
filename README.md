@@ -15,9 +15,9 @@
 
 </div>
 
-ShinawaseLoader 是 ECHO Steam（当前验证 echo-steam **26.9.1**，Electron 43.3.0）的社区外部 ModLoader，**不使用 ECHO 内置插件 VM**。默认以本地 CDP 端口启动 ECHO，把启用的 Mod 注入主窗口渲染进程；HTML、CSS、JavaScript、WASM、侧栏页面与 `window.echo` 均可使用，且不修改 Steam 的 `ECHO.exe` / `ECHO.app` / `app.asar`。Steam 更新后会自动把隔离运行时（`modded-runtime`）同步到新的 asar 与可执行文件。userData 在 Windows 为 `%APPDATA%\ECHO Steam`，在 macOS 为 `~/Library/Application Support/ECHO Steam`，在 Linux 为 `~/.config/ECHO Steam`（可用 `ECHO_USER_DATA_PATH_OVERRIDE`）。
+ShinawaseLoader 是 ECHO Steam（当前验证 echo-steam **26.10.18**，Electron 43.5.1）的社区外部 ModLoader，**不使用 ECHO 内置插件 VM**。默认以本地 CDP 端口启动 ECHO，把启用的 Mod 注入主窗口渲染进程；HTML、CSS、JavaScript、WASM、侧栏页面与 `window.echo` 均可使用，且不修改 Steam 的 `ECHO.exe` / `ECHO.app` / `app.asar`。Steam 更新后会自动把隔离运行时（`modded-runtime`）同步到新的 asar 与可执行文件。userData 在 Windows 为 `%APPDATA%\ECHO Steam`，在 macOS 为 `~/Library/Application Support/ECHO Steam`，在 Linux 为 `~/.config/ECHO Steam`（可用 `ECHO_USER_DATA_PATH_OVERRIDE`）。
 
-> **v1.7.0**（当前）对齐 echo-steam 26.9.1。Loader 生成独立的 `ECHO.modded.exe`，**不取代** Steam 原版；安装结束后会指导把 Steam 启动项设为 `"…\ECHO.modded.exe" %command%`。Shinawase 侧栏里提供 **Mod Market**，从 `echo.shiinasuki.com` 浏览并一键安装 / 更新社区插件。双击该 exe 或 `start-echo-with-mods.cmd` 时会自动检查 GitHub 上的 Loader 与预装包并更新，Steam 更新后也会自动刷新隔离运行时。发现逻辑优先 `...\common\ECHO\ECHO.exe`，可用 `ECHO_ROOT` / `selection.json` / `--echo` 覆盖；Playtest 只能显式选择。自 **v1.6.0** 起提供注入 UI（Mods 管理页、配置弹窗、Loader 状态页）与 Mod 自定义配置页：清单声明 `"configUi": "config-ui.js"` 后，配置弹窗以 `echoConfigUi` 上下文执行该脚本；未提供或加载失败时自动回退到 `config.schema.json` 表单。详见 [`ShinawaseLoader/SDK.md`](ShinawaseLoader/SDK.md)。
+> 当前版本对齐 echo-steam 26.10.18（新版侧边栏与歌单墙；ECHO 自 26.10.8 起移除了自带的流媒体、账号、下载与 MV 服务，Loader 安装中的这些接口由 Loader 的 preload 桥与流媒体桥提供）。Loader 生成独立的 `ECHO.modded.exe`，**不取代** Steam 原版；安装结束后会指导把 Steam 启动项设为 `"…\ECHO.modded.exe" %command%`。Shinawase 侧栏里提供 **Mod Market**，从 `echo.shiinasuki.com` 浏览并一键安装 / 更新社区插件。双击该 exe 或 `start-echo-with-mods.cmd` 时会自动检查 GitHub 上的 Loader 与预装包并更新，Steam 更新后也会自动刷新隔离运行时。发现逻辑优先 `...\common\ECHO\ECHO.exe`，可用 `ECHO_ROOT` / `selection.json` / `--echo` 覆盖；Playtest 只能显式选择。自 **v1.6.0** 起提供注入 UI（Mods 管理页、配置弹窗、Loader 状态页）与 Mod 自定义配置页：清单声明 `"configUi": "config-ui.js"` 后，配置弹窗以 `echoConfigUi` 上下文执行该脚本；未提供或加载失败时自动回退到 `config.schema.json` 表单。详见 [`ShinawaseLoader/SDK.md`](ShinawaseLoader/SDK.md)。
 
 ## 目录
 
@@ -403,7 +403,7 @@ Pet、osu!downloader、AudioBand、Wallpaper Bridge、Together、Steam Listen Bo
 新版 Electron 会校验 `app.asar` 的 header hash 和每个文件的 SHA256 blocks。隔离运行时必须使用独立的 `ECHO.exe` 副本；打补丁时会重算文件 integrity 并同步 exe 内的 header hash，不要 hardlink Steam 原版 exe。Steam 更新后 Loader / `ECHO.modded.exe` 会自动对照指纹并调用 `runtime-sync.mjs`；也可手动 `node ShinawaseLoader.mjs sync-runtime --force`。
 
 **日志在哪里？**  
-游戏目录旁：`ShinawaseLoader/Logs/loader.log`（运行与包日志）、`ShinawaseLoader/Logs/errors.log`（仅错误，Loader 退出时还会写下 `loader exited code=`）、`ShinawaseLoader/Logs/loader-stderr.log`（Loader 进程的 stderr，崩溃栈只出现在这里）、`ShinawaseLoader/Logs/modded-host.log`（`ECHO.modded.exe` 启动器自身的记录，例如因已有实例占用而退出）。
+游戏目录旁：`ShinawaseLoader/Logs/loader.log`（运行与包日志）、`ShinawaseLoader/Logs/errors.log`（仅错误，Loader 退出时还会写下 `loader exited code=`）、`ShinawaseLoader/Logs/loader-stderr.log`（Loader 进程的 stderr，崩溃栈只出现在这里）、`ShinawaseLoader/Logs/modded-host.log`（`ECHO.modded.exe` 启动器自身的记录，例如因已有实例占用而退出）。`loader.log` 与 `errors.log` 超过 8 MB 时轮换为同名的 `.1` 文件，只保留上一份。
 
 **语言选错了？**  
 删除或编辑 `%LOCALAPPDATA%\ShinawaseLoader\selection.json`，或在应用内 Loader 页切换。也可用 `--locale`。
