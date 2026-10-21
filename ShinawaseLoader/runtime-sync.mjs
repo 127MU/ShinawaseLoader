@@ -425,6 +425,7 @@ export const syncModdedRuntime = (options = {}) => {
     patchStatus: patchResult?.status || 'patch-failed',
     patchRevision: PATCH_REVISION,
     patchError,
+    patchWarning: patchResult?.playbackWarning || null,
     runtimeRoot,
     loaderVersion: readJson(join(loaderRoot, 'loader-version.json'), {})?.version || null,
   };
@@ -482,6 +483,7 @@ if (isMain) {
       asarSha256: result.stock?.asarSha256 || null,
       patch: result.patch?.status || result.next?.patchStatus || null,
       error: result.error || null,
+      warning: result.next?.patchWarning || null,
       runtimeRoot: result.runtimeRoot,
     }, null, 2));
     if (!result.ok && result.status !== 'busy') process.exitCode = 1;

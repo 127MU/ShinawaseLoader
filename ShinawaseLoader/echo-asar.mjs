@@ -723,6 +723,29 @@ const applyAuxiliaryWindowCrashFix = (text) => {
 };
 
 const steamStreamingValidation = (providerName) => `if (${providerName} !== "m3u8" || !/^https?:\\/\\/\\S+$/iu.test(radioUrl)) {\n      throw new Error("${STEAM_STREAMING_REJECT}");\n    }`;
+// 26.10.21 lets m3u8 items carry a Workshop playback source reference.
+const steamStreamingValidationWorkshop = (providerName) => `if (${providerName} !== "m3u8" || !isWorkshopSourceReference(radioUrl) && !/^https?:\\/\\/\\S+$/iu.test(radioUrl)) {\n      throw new Error("${STEAM_STREAMING_REJECT}");\n    }`;
+const findStreamingValidation = (text) => {
+  for (const providerName of ['provider2', 'provider']) {
+    const workshop = steamStreamingValidationWorkshop(providerName);
+    if (text.includes(workshop)) {
+      return { stock: workshop, patched: `if (${providerName} === "m3u8" && !isWorkshopSourceReference(radioUrl) && !/^https?:\\/\\/\\S+$/iu.test(radioUrl)) {\n      throw new Error("Streaming playback URL must be valid.");\n    }` };
+    }
+    const plain = steamStreamingValidation(providerName);
+    if (text.includes(plain)) {
+      return { stock: plain, patched: `if (${providerName} === "m3u8" && !/^https?:\\/\\/\\S+$/iu.test(radioUrl)) {\n      throw new Error("Streaming playback URL must be valid.");\n    }` };
+    }
+  }
+  return null;
+};
+// The streaming branch of the media resolver before and after 26.10.21, with
+// the m3u8 lines each patched resolver keeps.
+const streamingPathAnchors = [
+  ['  } else if (item.mediaType === "streaming") {\n    filePath = decodeM3u8ProviderTrackId(item.providerTrackId).trim();\n  } else {',
+    '      filePath = decodeM3u8ProviderTrackId(item.providerTrackId).trim();'],
+  ['  } else if (item.mediaType === "streaming") {\n    const source = decodeM3u8ProviderTrackId(item.providerTrackId).trim();\n    filePath = isWorkshopSourceReference(source) ? await resolveWorkshopPlaybackSource(source) : source;\n  } else {',
+    '      const source = decodeM3u8ProviderTrackId(item.providerTrackId).trim();\n      filePath = isWorkshopSourceReference(source) ? await resolveWorkshopPlaybackSource(source) : source;'],
+];
 const streamingProbeEnrichment = 'const sourceSampleRate = Number(source?.sampleRate);';
 const upgradePatchedPlayback = (text) => {
   let next = text.replace(playbackMarkerV1, playbackMarker);
@@ -742,22 +765,19 @@ const upgradePatchedPlayback = (text) => {
 const patchPlayback = (text) => {
   if (text.includes(playbackMarker) && text.includes(streamingProbeEnrichment)) return applyStreamingQualityPassthrough(text);
   if (text.includes(playbackMarker) || text.includes(playbackMarkerV1)) return upgradePatchedPlayback(text);
-  const validation = steamStreamingValidation('provider2');
-  const validationAlt = steamStreamingValidation('provider');
   let next = text;
-  const usedMinifiedProvider = next.includes(validation);
-  const oldValidation = usedMinifiedProvider ? validation : validationAlt;
-  if (!next.includes(oldValidation)) throw new Error('asar_streaming_validation_missing');
-  const providerName = usedMinifiedProvider ? 'provider2' : 'provider';
-  next = next.replace(oldValidation, `if (${providerName} === "m3u8" && !/^https?:\\/\\/\\S+$/iu.test(radioUrl)) {\n      throw new Error("Streaming playback URL must be valid.");\n    }`);
+  const validation = findStreamingValidation(next);
+  if (!validation) throw new Error('asar_streaming_validation_missing');
+  next = next.replace(validation.stock, validation.patched);
   const oldResolve = '  let filePath;\n  let probe = createProbeHintForMediaItem(';
   if (!next.includes(oldResolve)) throw new Error('asar_streaming_resolver_missing');
   next = next.replace(oldResolve, '  let filePath;\n  let inputHeaders;\n  let mimeType = null;\n  let probe = createProbeHintForMediaItem(');
-  const oldPath = '  } else if (item.mediaType === "streaming") {\n    filePath = decodeM3u8ProviderTrackId(item.providerTrackId).trim();\n  } else {';
-  if (!next.includes(oldPath)) throw new Error('asar_streaming_path_missing');
+  const pathAnchor = streamingPathAnchors.find(([anchor]) => next.includes(anchor));
+  if (!pathAnchor) throw new Error('asar_streaming_path_missing');
+  const [oldPath, m3u8Branch] = pathAnchor;
   // Resolve non-m3u8 streaming through the Loader bridge and keep probe/mime
   // metadata so exclusive, ASIO, and native DSP can admit HTTP sources.
-  next = next.replace(oldPath, '  } else if (item.mediaType === "streaming") {\n    if (item.provider === "m3u8") {\n      filePath = decodeM3u8ProviderTrackId(item.providerTrackId).trim();\n    } else {\n      const resolver = globalThis.__shinawaseResolveStreamingPlayback;\n      if (typeof resolver !== "function") throw new Error("Streaming playback bridge is unavailable.");\n      const source = await resolver({ provider: item.provider, providerTrackId: item.providerTrackId, quality: item.quality || item.streamingQuality });\n      filePath = source?.url;\n      inputHeaders = source?.headers;\n      if (typeof filePath !== "string" || !/^https?:\\/\\/\\S+$/iu.test(filePath)) throw new Error("Streaming provider did not return a playable URL.");\n      const sourceSampleRate = Number(source?.sampleRate);\n      const sourceBitDepth = Number(source?.bitDepth);\n      const sourceBitrate = Number(source?.bitrate);\n      const sourceChannels = Number(source?.channels);\n      probe = {\n        ...(probe || {}),\n        durationSeconds: durationSeconds || probe?.durationSeconds || undefined,\n        fileSampleRate: Number.isFinite(sourceSampleRate) && sourceSampleRate > 0 ? sourceSampleRate : probe?.fileSampleRate,\n        channels: Number.isFinite(sourceChannels) && sourceChannels > 0 ? sourceChannels : (probe?.channels || 2),\n        codec: typeof source?.codec === "string" && source.codec.trim() ? source.codec : probe?.codec,\n        bitDepth: Number.isFinite(sourceBitDepth) && sourceBitDepth > 0 ? sourceBitDepth : probe?.bitDepth,\n        bitrate: Number.isFinite(sourceBitrate) && sourceBitrate > 0 ? sourceBitrate : probe?.bitrate,\n      };\n      if (typeof source?.mimeType === "string" && source.mimeType.trim()) mimeType = source.mimeType;\n    }\n  } else {');
+  next = next.replace(oldPath, '  } else if (item.mediaType === "streaming") {\n    if (item.provider === "m3u8") {\n' + m3u8Branch + '\n    } else {\n      const resolver = globalThis.__shinawaseResolveStreamingPlayback;\n      if (typeof resolver !== "function") throw new Error("Streaming playback bridge is unavailable.");\n      const source = await resolver({ provider: item.provider, providerTrackId: item.providerTrackId, quality: item.quality || item.streamingQuality });\n      filePath = source?.url;\n      inputHeaders = source?.headers;\n      if (typeof filePath !== "string" || !/^https?:\\/\\/\\S+$/iu.test(filePath)) throw new Error("Streaming provider did not return a playable URL.");\n      const sourceSampleRate = Number(source?.sampleRate);\n      const sourceBitDepth = Number(source?.bitDepth);\n      const sourceBitrate = Number(source?.bitrate);\n      const sourceChannels = Number(source?.channels);\n      probe = {\n        ...(probe || {}),\n        durationSeconds: durationSeconds || probe?.durationSeconds || undefined,\n        fileSampleRate: Number.isFinite(sourceSampleRate) && sourceSampleRate > 0 ? sourceSampleRate : probe?.fileSampleRate,\n        channels: Number.isFinite(sourceChannels) && sourceChannels > 0 ? sourceChannels : (probe?.channels || 2),\n        codec: typeof source?.codec === "string" && source.codec.trim() ? source.codec : probe?.codec,\n        bitDepth: Number.isFinite(sourceBitDepth) && sourceBitDepth > 0 ? sourceBitDepth : probe?.bitDepth,\n        bitrate: Number.isFinite(sourceBitrate) && sourceBitrate > 0 ? sourceBitrate : probe?.bitrate,\n      };\n      if (typeof source?.mimeType === "string" && source.mimeType.trim()) mimeType = source.mimeType;\n    }\n  } else {');
   next = applyStreamingQualityPassthrough(next);
   const oldReturn = '  return { filePath, mimeType: null, probe, durationSeconds };';
   if (!next.includes(oldReturn)) throw new Error('asar_streaming_return_missing');
@@ -938,11 +958,20 @@ const patch = (root) => {
   const mainWithBridge = currentText.includes(marker) || currentText.includes('external-mod-loader:start:requested') ? currentText : `${bridge}\n${currentText}`;
   const mainWithNative = mainWithBridge.includes(nativeHostMarker) ? mainWithBridge : `${nativeHostBridge}\n${mainWithBridge}`;
   const mainWithSplash = injectSplashBridge(mainWithNative);
-  const mainText = applyRepeatOneIdentityFix(applyAuxiliaryWindowCrashFix(patchPlayback(mainWithSplash)));
+  // A streaming anchor that a new ECHO build moved must not cost the whole
+  // runtime its Loader bridge: keep the other patches and report the miss.
+  let playbackWarning = null;
+  let mainWithPlayback = mainWithSplash;
+  try {
+    mainWithPlayback = patchPlayback(mainWithSplash);
+  } catch (error) {
+    playbackWarning = error instanceof Error ? error.message : String(error);
+  }
+  const mainText = applyRepeatOneIdentityFix(applyAuxiliaryWindowCrashFix(mainWithPlayback));
   const preloadText = patchPreload(currentPreloadText);
   const missingIntegrity = [main, preload, ...playlistPatches.map((item) => item.entry)].filter(Boolean).some((entry) => !entry.info.integrity);
   if (mainText === currentText && preloadText === currentPreloadText && !playlistPatches.length && !missingIntegrity) {
-    return { status: 'already-patched', integrity: syncIntegrity(root, archive) };
+    return { status: 'already-patched', integrity: syncIntegrity(root, archive), ...(playbackWarning ? { playbackWarning } : {}) };
   }
   const backup = backupFor(root);
   if (!existsSync(backup)) {
@@ -957,7 +986,7 @@ const patch = (root) => {
   for (const item of playlistPatches) replacements.set(item.entry.relativePath, item.playlistsText);
   writeArchive(archive, replacements);
   writeFileSync(stateFor(root), `${JSON.stringify({ originalSha256: sha256(readFileSync(backup)), patchedSha256: sha256(readFileSync(archive)), patchedAt: new Date().toISOString() }, null, 2)}\n`);
-  return { status: 'patched', integrity: syncIntegrity(root, archive) };
+  return { status: 'patched', integrity: syncIntegrity(root, archive), ...(playbackWarning ? { playbackWarning } : {}) };
 };
 
 const restore = (root, force = false) => {
@@ -1032,9 +1061,9 @@ const verifyAnchors = (root) => {
     mainEntry: Boolean(main),
     preloadEntry: Boolean(preload),
     steamStreamingReject: mainText.includes(STEAM_STREAMING_REJECT),
-    steamStreamingValidation: mainText.includes(steamStreamingValidation('provider2')) || mainText.includes(steamStreamingValidation('provider')),
+    steamStreamingValidation: Boolean(findStreamingValidation(mainText)),
     streamingResolver: mainText.includes('  let filePath;\n  let probe = createProbeHintForMediaItem('),
-    streamingPath: mainText.includes('  } else if (item.mediaType === "streaming") {\n    filePath = decodeM3u8ProviderTrackId(item.providerTrackId).trim();\n  } else {'),
+    streamingPath: streamingPathAnchors.some(([anchor]) => mainText.includes(anchor)),
     streamingReturn: mainText.includes('  return { filePath, mimeType: null, probe, durationSeconds };'),
     qualityPassthrough: mainText.includes('quality: "standard",\n      stableKey:'),
     preloadApiAnchor: preloadStubTriple(preloadText) || Boolean(findEchoApiOpen(preloadText)),
@@ -1071,7 +1100,7 @@ const verifyAnchors = (root) => {
   };
 };
 
-export { patch, restore, syncIntegrity, verifyAnchors, patchSteamPlaylistsPage, patchLyricsPage, applyRepeatOneIdentityFix, patchPreload, injectSplashBridge, applyAuxiliaryWindowCrashFix, PATCH_REVISION, bridge as mainBridgeSource };
+export { patch, restore, syncIntegrity, verifyAnchors, patchSteamPlaylistsPage, patchLyricsPage, patchPlayback, applyRepeatOneIdentityFix, patchPreload, injectSplashBridge, applyAuxiliaryWindowCrashFix, PATCH_REVISION, bridge as mainBridgeSource };
 
 const isMain = process.argv[1] && resolve(fileURLToPath(import.meta.url)) === resolve(process.argv[1]);
 if (isMain) {

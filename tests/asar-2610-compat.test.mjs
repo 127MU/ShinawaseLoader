@@ -4,7 +4,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
-import { applyAuxiliaryWindowCrashFix, applyRepeatOneIdentityFix, patchLyricsPage, patchPreload, patchSteamPlaylistsPage } from '../ShinawaseLoader/echo-asar.mjs';
+import { applyAuxiliaryWindowCrashFix, applyRepeatOneIdentityFix, patchLyricsPage, patchPlayback, patchPreload, patchSteamPlaylistsPage } from '../ShinawaseLoader/echo-asar.mjs';
 
 test('preload bridge invokes the bridge channels even when ECHO\'s IpcChannels lost them', () => {
   // 26.10.8+ Steam preloads ship an IpcChannels table without the streaming,
@@ -243,4 +243,63 @@ test('the island constructor stays non-topmost when its topmost becomes switchab
   const patched = applyAuxiliaryWindowCrashFix(`const window = new BrowserWindow({\n${ctor}\n    }\n  });`);
   assert.ok(patched.includes('    alwaysOnTop: false,\n    ...linuxOverlayBrowserWindowOptions(),'));
   assert.ok(!patched.includes('isMiniPlayerForcedTopmost()'), 'the deferred helper applies the setting instead');
+});
+
+test('streaming playback patch covers ECHO before and after Workshop playback sources (26.10.21)', async () => {
+  // Trimmed media-request validator and resolver in both shapes; only the
+  // anchored lines are ECHO's, the rest is stub scaffolding.
+  const build = (workshop) => [
+    'const isWorkshopSourceReference = (value) => value.startsWith("echo-workshop-source:");',
+    'const resolveWorkshopPlaybackSource = async (value) => `https://workshop.example/${value}`;',
+    'const decodeM3u8ProviderTrackId = (value) => value;',
+    'const createProbeHintForMediaItem = () => ({});',
+    'globalThis.validate = (provider2, providerTrackId) => {',
+    '  if (true) {',
+    '    const radioUrl = provider2 === "m3u8" ? decodeM3u8ProviderTrackId(providerTrackId).trim() : "";',
+    workshop
+      ? '    if (provider2 !== "m3u8" || !isWorkshopSourceReference(radioUrl) && !/^https?:\\/\\/\\S+$/iu.test(radioUrl)) {'
+      : '    if (provider2 !== "m3u8" || !/^https?:\\/\\/\\S+$/iu.test(radioUrl)) {',
+    '      throw new Error("Music streaming playback is not available in the Steam distribution.");',
+    '    }',
+    '    return { provider: provider2 };',
+    '  }',
+    '};',
+    'globalThis.resolve = async (item, durationSeconds) => {',
+    '  let filePath;',
+    '  let probe = createProbeHintForMediaItem(',
+    '    item);',
+    '  if (item.mediaType === "remote") {',
+    '    filePath = "remote";',
+    '  } else if (item.mediaType === "streaming") {',
+    ...(workshop
+      ? ['    const source = decodeM3u8ProviderTrackId(item.providerTrackId).trim();',
+        '    filePath = isWorkshopSourceReference(source) ? await resolveWorkshopPlaybackSource(source) : source;']
+      : ['    filePath = decodeM3u8ProviderTrackId(item.providerTrackId).trim();']),
+    '  } else {',
+    '    filePath = item.path;',
+    '  }',
+    '  return { filePath, mimeType: null, probe, durationSeconds };',
+    '};',
+  ].join('\n');
+  for (const workshop of [false, true]) {
+    const stock = build(workshop);
+    const patched = patchPlayback(stock);
+    assert.notEqual(patched, stock);
+    assert.equal(patchPlayback(patched), patched, 'idempotent');
+    const context = { __shinawaseResolveStreamingPlayback: async ({ provider, providerTrackId }) => ({ url: `https://cdn.example/${provider}/${providerTrackId}.flac`, headers: { A: '1' }, sampleRate: 48000, codec: 'flac', mimeType: 'audio/flac' }) };
+    vm.runInNewContext(patched, context);
+    assert.deepEqual({ ...context.validate('netease', '1') }, { provider: 'netease' }, 'non-m3u8 providers pass validation');
+    assert.throws(() => context.validate('m3u8', 'not a url'), /must be valid/u);
+    const netease = await context.resolve({ mediaType: 'streaming', provider: 'netease', providerTrackId: '1' }, 200);
+    assert.equal(netease.filePath, 'https://cdn.example/netease/1.flac');
+    assert.equal(netease.mimeType, 'audio/flac');
+    assert.equal(netease.probe.fileSampleRate, 48000);
+    const radio = await context.resolve({ mediaType: 'streaming', provider: 'm3u8', providerTrackId: 'https://radio.example/live.m3u8' }, null);
+    assert.equal(radio.filePath, 'https://radio.example/live.m3u8');
+    if (workshop) {
+      assert.deepEqual({ ...context.validate('m3u8', 'echo-workshop-source:abc') }, { provider: 'm3u8' });
+      const fromWorkshop = await context.resolve({ mediaType: 'streaming', provider: 'm3u8', providerTrackId: 'echo-workshop-source:abc' }, null);
+      assert.equal(fromWorkshop.filePath, 'https://workshop.example/echo-workshop-source:abc', 'Workshop sources keep resolving');
+    }
+  }
 });
