@@ -1,0 +1,46 @@
+:root { color-scheme: light dark; }
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  padding: 28px 24px;
+  font: 14px/1.55 system-ui, "Segoe UI", "Microsoft YaHei UI", sans-serif;
+  background: var(--echo-host-appBg, Canvas);
+  color: var(--echo-host-text, CanvasText);
+}
+main { display: grid; gap: 16px; max-width: 680px; margin: 0 auto; }
+h1 { margin: 0; font-size: 24px; color: var(--echo-host-heading, CanvasText); letter-spacing: 0.01em; }
+header p { margin: 4px 0 0; color: var(--echo-host-muted, GrayText); }
+.card {
+  padding: 16px 18px;
+  border: 1px solid var(--echo-host-border, ButtonBorder);
+  border-radius: 12px;
+  background: var(--echo-host-panel, Canvas);
+}
+.state-line { display: flex; align-items: center; gap: 10px; font-size: 15px; }
+.dot { width: 10px; height: 10px; border-radius: 50%; background: var(--echo-host-muted, GrayText); flex: none; }
+.dot[data-tone="ok"] { background: #3fbf7f; }
+.dot[data-tone="busy"] { background: var(--echo-host-accent, Highlight); }
+.dot[data-tone="warn"] { background: #e0a43a; }
+.card > p { margin: 6px 0 0; color: var(--echo-host-muted, GrayText); }
+dl { display: grid; grid-template-columns: max-content 1fr; gap: 4px 14px; margin: 14px 0 0; }
+dt { color: var(--echo-host-muted, GrayText); }
+dd { margin: 0; overflow-wrap: anywhere; }
+.progress { height: 4px; margin-top: 12px; border-radius: 2px; background: var(--echo-host-border, ButtonBorder); overflow: hidden; }
+.progress span { display: block; height: 100%; width: 0; background: var(--echo-host-accent, Highlight); transition: width 0.3s ease; }
+.actions { display: flex; flex-wrap: wrap; gap: 8px; }
+button {
+  padding: 9px 14px;
+  border: 1px solid var(--echo-host-border, ButtonBorder);
+  border-radius: 8px;
+  font: inherit;
+  color: inherit;
+  background: var(--echo-host-panel, ButtonFace);
+  cursor: pointer;
+}
+button.primary { color: var(--echo-host-accentText, ButtonText); background: var(--echo-host-accent, ButtonFace); border-color: transparent; }
+button:disabled { opacity: 0.5; cursor: default; }
+button[hidden] { display: none; }
+.toggle { display: flex; align-items: center; gap: 8px; }
+.hint { margin: -8px 0 0; color: var(--echo-host-muted, GrayText); font-size: 12.5px; }
+.error { margin: 0; padding: 10px 12px; border-radius: 8px; background: rgba(224, 80, 80, 0.12); color: #e05050; overflow-wrap: anywhere; }
+@media (prefers-reduced-motion: reduce) { .progress span { transition: none; } }

@@ -145,6 +145,8 @@ const createDom = () => {
     echo: null,
     setTimeout: globalThis.setTimeout,
     clearTimeout: globalThis.clearTimeout,
+    setInterval: globalThis.setInterval,
+    clearInterval: globalThis.clearInterval,
     addEventListener(type, fn) { (listeners.get(type) || listeners.set(type, []).get(type)).push(fn); },
     removeEventListener(type, fn) { listeners.set(type, (listeners.get(type) || []).filter((item) => item !== fn)); },
     dispatchEvent(event) { for (const fn of listeners.get(event.type) || []) fn(event); return true; },

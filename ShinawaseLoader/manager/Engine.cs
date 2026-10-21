@@ -50,6 +50,7 @@ namespace Shinawase.Manager
         private bool hasHost;
         private bool hasRuntime;
         private bool selected;
+        private string edition = "external";
 
         public static EchoTarget FromExe(string exe)
         {
@@ -74,11 +75,22 @@ namespace Shinawase.Manager
             LoaderVersion = info == null ? null : info.Version;
             HasHost = File.Exists(ModdedExe);
             HasRuntime = File.Exists(RuntimeExe);
+            // workshop.json is written by the Workshop edition (workshop-bootstrap.mjs);
+            // setup records the chosen edition there. Without a mark, an install
+            // that has no ECHO.modded.exe but a Workshop state is the Workshop edition.
+            var workshop = Json.TryReadObject(WorkshopState);
+            var marked = workshop == null ? null : workshop.Str("edition");
+            Edition = marked == "workshop" || marked == "external" ? marked : (!hasHost && workshop != null ? "workshop" : "external");
             try { EchoVersion = FileVersionInfo.GetVersionInfo(ExePath).ProductVersion; } catch { }
             Raise("DetailText");
             Raise("Installed");
             Raise("Healthy");
         }
+
+        public string WorkshopState { get { return Path.Combine(LoaderRoot, "workshop.json"); } }
+        public string Edition { get { return edition; } private set { Set(ref edition, value, "Edition"); Raise("IsWorkshop"); } }
+        public bool IsWorkshop { get { return edition == "workshop"; } }
+        public string HostScript { get { return Path.Combine(LoaderRoot, "echo-modded-host.mjs"); } }
 
         public string ModdedExe { get { return Path.Combine(Root, "ECHO.modded.exe"); } }
         public string RuntimeExe { get { return Path.Combine(LoaderRoot, "modded-runtime", "ECHO.exe"); } }
@@ -86,7 +98,8 @@ namespace Shinawase.Manager
         public bool HasHost { get { return hasHost; } private set { Set(ref hasHost, value, "HasHost"); } }
         public bool HasRuntime { get { return hasRuntime; } private set { Set(ref hasRuntime, value, "HasRuntime"); } }
         public bool Installed { get { return loaderVersion != null; } }
-        public bool Healthy { get { return Installed && hasHost && hasRuntime; } }
+        // The Workshop edition starts through echo-modded-host.mjs, not ECHO.modded.exe.
+        public bool Healthy { get { return Installed && hasRuntime && (hasHost || (IsWorkshop && File.Exists(HostScript))); } }
         public bool IsSelected { get { return selected; } set { Set(ref selected, value, "IsSelected"); } }
 
         public string Title { get { return Path.GetFileNameWithoutExtension(ExePath); } }
@@ -106,6 +119,7 @@ namespace Shinawase.Manager
                 var parts = new List<string>();
                 if (!string.IsNullOrEmpty(EchoVersion)) parts.Add(L.F("target.version", EchoVersion));
                 parts.Add(Installed ? L.F("target.loader", LoaderVersion) : L.T("target.noLoader"));
+                if (Installed && IsWorkshop) parts.Add(L.T("target.workshop"));
                 return string.Join("  ·  ", parts);
             }
         }
@@ -139,8 +153,44 @@ namespace Shinawase.Manager
                 if (File.Exists(bundled)) return bundled;
                 var configured = Config.Str("runtimePath");
                 if (!string.IsNullOrEmpty(configured) && File.Exists(configured)) return configured;
+                if (UsesEchoNode) return ExePath;
                 return SystemNode.OnPath() ?? "node";
             }
+        }
+
+        // Workshop installs ship no node.exe: the Loader runs on ECHO's own
+        // executable (Electron's RunAsNode fuse), recorded as nodeRuntime "echo".
+        public bool UsesEchoNode
+        {
+            get
+            {
+                if (File.Exists(Path.Combine(LoaderRoot, "node.exe"))) return false;
+                var configured = Config.Str("runtimePath");
+                if (!string.IsNullOrEmpty(configured) && File.Exists(configured)) return false;
+                return string.Equals(Config.Str("nodeRuntime"), "echo", StringComparison.OrdinalIgnoreCase);
+            }
+        }
+
+        // Environment for running NodePath; null for a real Node.
+        public Dictionary<string, string> NodeEnv { get { return UsesEchoNode ? EchoNode.Env() : null; } }
+    }
+
+    public static class EchoNode
+    {
+        public static Dictionary<string, string> Env()
+        {
+            return new Dictionary<string, string> { { "ELECTRON_RUN_AS_NODE", "1" }, { "ELECTRON_NO_ASAR", "1" } };
+        }
+
+        public static Dictionary<string, string> Merge(IDictionary<string, string> first, IDictionary<string, string> second)
+        {
+            var merged = new Dictionary<string, string>();
+            foreach (var source in new[] { first, second })
+            {
+                if (source == null) continue;
+                foreach (var pair in source) merged[pair.Key] = pair.Value;
+            }
+            return merged;
         }
     }
 
@@ -430,6 +480,30 @@ namespace Shinawase.Manager
         public bool SetSteam = true;
         public string Mode = "install";   // install | update | repair
         public List<string> PackageDirs = new List<string>();
+        // external: ECHO.modded.exe + the Loader's self-update.
+        // workshop: the ECHO Workshop item installs, starts and updates the Loader.
+        public string Edition = "external";
+        public string WorkshopZip;        // bundled shinawase-workshop.zip, if any
+        public bool Launch;               // workshop: switch ECHO to the Mods runtime when done
+    }
+
+    // The Workshop edition ships beside the loader tree: <release>/workshop/ in a
+    // release or the setup payload, <repo>/dist/ in a source checkout.
+    public static class WorkshopPackage
+    {
+        public const string FileName = "shinawase-workshop.zip";
+
+        public static string Find(string sourceDir)
+        {
+            if (string.IsNullOrEmpty(sourceDir)) return null;
+            var root = Path.GetDirectoryName(sourceDir.TrimEnd('\\'));
+            if (root == null) return null;
+            foreach (var candidate in new[] { Path.Combine(root, "workshop", FileName), Path.Combine(root, "dist", FileName) })
+            {
+                if (File.Exists(candidate)) return candidate;
+            }
+            return null;
+        }
     }
 
     public sealed class InstallResult
@@ -447,6 +521,8 @@ namespace Shinawase.Manager
         public bool SteamApplied;
         public bool ManagerUpdated;
         public bool Cancelled;
+        public bool WorkshopImported;
+        public bool Switched;
     }
 
     public sealed class StepFailure : Exception
@@ -500,6 +576,18 @@ namespace Shinawase.Manager
         {
             Steps.Clear();
             Action<string, double> add = (key, weight) => Steps.Add(new StepVm { Key = key, Weight = weight });
+            if (plan.Edition == "workshop")
+            {
+                add("prepare", 2);
+                if (plan.UseRemote || string.IsNullOrEmpty(plan.WorkshopZip)) add("fetch", 14);
+                add("ws.echo", 8);
+                add("ws.import", 14);
+                add("ws.approve", 8);
+                add("ws.loader", 40);
+                add("ws.switch", plan.Launch ? 14 : 4);
+                Overall = 0;
+                return;
+            }
             add("prepare", 2);
             add("node", 14);
             if (plan.UseRemote) add("fetch", 8);
@@ -571,6 +659,7 @@ namespace Shinawase.Manager
 
         public async Task<InstallResult> RunAsync(InstallPlan plan, CancellationToken token)
         {
+            if (plan.Edition == "workshop") return await RunWorkshopAsync(plan, token);
             var result = new InstallResult();
             var target = plan.Target;
             source = plan.SourceDir;
@@ -598,6 +687,8 @@ namespace Shinawase.Manager
                         foreach (var p in running) p.Dispose();
                         if (count > 0) throw new StepFailure(L.F("echoRunning.body", count));
                         Lifecycle.StopLoader(target.LoaderRoot);
+                        // Installing on purpose lifts an earlier uninstall's opt-out.
+                        Fs.TryDelete(Path.Combine(target.Root, ".shinawase-uninstalled"));
                     });
                     return StepState.Done;
                 }, token);
@@ -744,6 +835,14 @@ namespace Shinawase.Manager
                 target.Refresh();
                 result.Ok = true;
                 result.LoaderVersion = target.LoaderVersion;
+                // Both editions share this folder; record which one setup installed.
+                var workshopState = Json.TryReadObject(target.WorkshopState);
+                if (workshopState != null)
+                {
+                    workshopState["edition"] = "external";
+                    Json.WriteObject(target.WorkshopState, workshopState);
+                    target.Refresh();
+                }
                 Note("done · loader " + result.LoaderVersion);
             }
             catch (OperationCanceledException)
@@ -770,6 +869,190 @@ namespace Shinawase.Manager
             }
             UpdateOverall();
             return result;
+        }
+
+        // ---- Workshop edition ------------------------------------------------
+        // Mirrors workshop-setup.mjs: ECHO imports shinawase-workshop.zip through its
+        // own Workshop page and asks the user for the system:full approval in its own
+        // dialog; the item's trusted module then installs the Loader. Everything runs
+        // on ECHO's executable in Node mode, so this edition needs no Node download.
+        private static readonly string[] WorkshopStages = { "ws.echo", "ws.import", "ws.approve", "ws.loader", "ws.switch" };
+
+        private async Task<InstallResult> RunWorkshopAsync(InstallPlan plan, CancellationToken token)
+        {
+            var result = new InstallResult();
+            var target = plan.Target;
+            source = plan.SourceDir;
+            stagedPackages = null;
+            FetchedSource = null;
+            var current = "prepare";
+            Note("ShinawaseManager " + BuildInfo.Version + " · workshop " + plan.Mode + " · " + target.ExePath);
+            try
+            {
+                var script = Path.Combine(source, "workshop-setup.mjs");
+                await RunStep("prepare", async step =>
+                {
+                    if (!File.Exists(target.ExePath)) throw new StepFailure("ECHO.exe not found: " + target.ExePath);
+                    if (!File.Exists(script)) throw new StepFailure("workshop-setup.mjs is missing from " + source);
+                    await Task.Run(() =>
+                    {
+                        Directory.CreateDirectory(target.LoaderRoot);
+                        var running = Lifecycle.EchoProcesses(target);
+                        var count = running.Count;
+                        foreach (var p in running) p.Dispose();
+                        if (count > 0) throw new StepFailure(L.F("echoRunning.body", count));
+                    });
+                    return StepState.Done;
+                }, token);
+
+                var zip = plan.WorkshopZip;
+                if (Step("fetch") != null)
+                {
+                    current = "fetch";
+                    await RunStep("fetch", async step =>
+                    {
+                        zip = await FetchWorkshop(plan, step, token);
+                        return StepState.Done;
+                    }, token);
+                }
+                if (string.IsNullOrEmpty(zip) || !File.Exists(zip)) throw new StepFailure(L.T("ws.noZip"));
+
+                var args = new List<string> { script, "install", "--echo", target.Root, "--zip", zip };
+                if (!plan.Launch) args.Add("--no-switch");
+                string active = null;
+                JObject final = null;
+                Action<string> enter = key =>
+                {
+                    if (active == key) return;
+                    var started = false;
+                    foreach (var name in WorkshopStages)
+                    {
+                        var step = Step(name);
+                        if (step == null) continue;
+                        if (name == key) { started = true; step.State = StepState.Active; step.Progress = -1; PropertyChangedHandler(step); Note("== " + L.T("step." + name)); break; }
+                        if (step.State == StepState.Active || step.State == StepState.Pending) step.State = step.State == StepState.Active ? StepState.Done : StepState.Skipped;
+                    }
+                    if (started) { active = key; current = key; }
+                    UpdateOverall();
+                };
+                var run = Proc.RunAsync(target.ExePath, args, target.Root, EchoNode.Env(), 60 * 60 * 1000, line =>
+                {
+                    JObject evt;
+                    try { evt = Json.ParseObject(line); } catch { return; }
+                    var kind = evt.Str("event");
+                    if (kind == "result") { final = evt; return; }
+                    if (kind == "log") { Note("workshop: " + evt.Str("message")); return; }
+                    if (kind != "stage") return;
+                    switch (evt.Str("stage"))
+                    {
+                        case "zip": Note("workshop item " + evt.Str("version") + " · loader " + evt.Str("loaderVersion")); break;
+                        case "echo": enter("ws.echo"); Step("ws.echo").Detail = L.T("d.ws.echo"); break;
+                        case "import":
+                            enter("ws.import");
+                            if (evt.Bool("already") == true) { Step("ws.import").Detail = L.T("d.ws.current"); }
+                            else Step("ws.import").Detail = L.T("d.ws.import");
+                            break;
+                        case "approve": enter("ws.approve"); Step("ws.approve").Detail = L.T("d.ws.approve"); break;
+                        case "loader":
+                            enter("ws.loader");
+                            var percent = evt.Num("percent");
+                            var loaderStep = Step("ws.loader");
+                            if (percent.HasValue && percent.Value > 0) loaderStep.Progress = Math.Min(1, percent.Value / 100.0);
+                            loaderStep.Detail = string.IsNullOrEmpty(evt.Str("step")) ? L.T("d.ws.loader") : L.F("d.ws.loaderStep", evt.Str("step"));
+                            UpdateOverall();
+                            break;
+                        case "switch": enter("ws.switch"); Step("ws.switch").Detail = plan.Launch ? L.T("d.ws.switch") : L.T("d.ws.close"); break;
+                    }
+                }, token);
+                var output = await run;
+                if (final == null || final.Bool("ok") != true)
+                {
+                    var reason = final != null ? final.Str("error") : output.Tail(6);
+                    throw new StepFailure(WorkshopError(reason));
+                }
+                foreach (var name in WorkshopStages)
+                {
+                    var step = Step(name);
+                    if (step == null) continue;
+                    if (step.State == StepState.Active) step.State = StepState.Done;
+                    else if (step.State == StepState.Pending) step.State = StepState.Skipped;
+                    step.Progress = 1;
+                }
+                Selection.Update(new Dictionary<string, object> { { "echoExe", target.ExePath }, { "locale", L.Locale }, { "selectedAt", DateTime.UtcNow.ToString("o", CultureInfo.InvariantCulture) } });
+                target.Refresh();
+                result.Ok = true;
+                result.LoaderVersion = final.Str("loaderVersion") ?? target.LoaderVersion;
+                result.EchoVersion = target.EchoVersion;
+                result.WorkshopImported = final.Bool("imported") == true;
+                result.Switched = final.Bool("switched") == true;
+                Note("done · workshop · loader " + result.LoaderVersion);
+            }
+            catch (OperationCanceledException)
+            {
+                result.Cancelled = true;
+                result.FailedStep = current;
+                result.Error = L.T("wiz.cancelling");
+                MarkFailed(current);
+            }
+            catch (Exception error)
+            {
+                result.FailedStep = current;
+                result.Error = error is StepFailure ? error.Message : error.GetType().Name + ": " + error.Message;
+                MarkFailed(current);
+                Note("FAILED at " + current + ": " + result.Error);
+                Log.Error(error.ToString());
+            }
+            UpdateOverall();
+            return result;
+        }
+
+        private static string WorkshopError(string reason)
+        {
+            if (string.IsNullOrEmpty(reason)) return L.T("ws.err.unknown");
+            if (reason == "approval_declined") return L.T("ws.err.declined");
+            if (reason == "approval_timeout") return L.T("ws.err.timeout");
+            if (reason == "echo_already_running") return L.T("ws.err.running");
+            if (reason.StartsWith("workshop_zip_", StringComparison.Ordinal)) return L.F("ws.err.zip", reason);
+            return reason;
+        }
+
+        // The Workshop zip of the newest release: signed mirror first, then the
+        // GitHub release asset; the helper checks it carries the expected Loader.
+        private async Task<string> FetchWorkshop(InstallPlan plan, StepVm step, CancellationToken token)
+        {
+            var helper = Path.Combine(plan.SourceDir, "manager", "manager-helper.mjs");
+            if (!File.Exists(helper)) throw new StepFailure("manager-helper.mjs is missing");
+            var staging = Path.Combine(Paths.UserDataRoot, "staging-workshop");
+            Fs.TryDelete(staging);
+            Directory.CreateDirectory(staging);
+            var dest = Path.Combine(staging, WorkshopPackage.FileName);
+            var args = new List<string> { helper, "fetch-workshop", "--dest", dest, "--cache", Path.Combine(Paths.UserDataRoot, "update-cache") };
+            args.AddRange(net.HelperMirrorArgs());
+            step.Detail = L.T("d.fetch.check");
+            JObject final = null;
+            var run = Proc.RunAsync(plan.Target.ExePath, args, staging, EchoNode.Env(), 20 * 60 * 1000, line =>
+            {
+                JObject evt;
+                try { evt = Json.ParseObject(line); } catch { return; }
+                var kind = evt.Str("event");
+                if (kind == "result") final = evt;
+                else if (kind == "stage") step.Detail = L.F("d.fetch.get", evt.Str("label") ?? evt.Str("stage"));
+                else if (kind == "log") Note("helper: " + evt.Str("message"));
+            }, token);
+            var output = await WithTicker(step, s => step.Detail, run);
+            if (final == null || final.Bool("ok") != true)
+            {
+                if (!string.IsNullOrEmpty(plan.WorkshopZip) && File.Exists(plan.WorkshopZip))
+                {
+                    Note("fetch-workshop failed, using the bundled zip: " + (final != null ? final.Str("error") : output.Tail(3)));
+                    step.Detail = L.T("d.ws.bundled");
+                    return plan.WorkshopZip;
+                }
+                throw new StepFailure("fetch: " + (final != null ? final.Str("error") : output.Tail(6)));
+            }
+            step.Detail = "v" + final.Str("loaderVersion") + " · " + final.Str("via");
+            Note("fetched workshop " + final.Str("version") + " via " + final.Str("via"));
+            return final.Str("path");
         }
 
         private static Exception FindAccessDenied(Exception error)
@@ -1136,7 +1419,7 @@ namespace Shinawase.Manager
             var env = new Dictionary<string, string> { { "ECHO_MOD_HOME", target.LoaderRoot }, { "ECHO_GAME_ROOT", target.Root }, { "NO_COLOR", "1" } };
             var all = new List<string> { Path.Combine(target.LoaderRoot, "ShinawaseLoader.mjs") };
             all.AddRange(args);
-            return Proc.RunAsync(node ?? target.NodePath, all, target.LoaderRoot, env, 180000, null, token);
+            return Proc.RunAsync(node ?? target.NodePath, all, target.LoaderRoot, node == null ? EchoNode.Merge(env, target.NodeEnv) : env, 180000, null, token);
         }
 
         public static List<ModVm> ReadMods(EchoTarget target)
@@ -1346,13 +1629,22 @@ namespace Shinawase.Manager
             var status = new RunStatus();
             if (target == null) return status;
             var processes = await Task.Run(() => EchoProcesses(target));
+            var windowlessStock = 0;
+            var stock = 0;
             foreach (var process in processes)
             {
                 var image = Proc.ImagePath(process);
                 if (Paths.Same(image, target.RuntimeExe) || Paths.Same(image, target.ModdedExe)) status.ModdedRunning = true;
-                else status.StockRunning = true;
+                else
+                {
+                    stock++;
+                    try { if (process.MainWindowHandle == IntPtr.Zero) windowlessStock++; } catch { }
+                }
                 process.Dispose();
             }
+            // The Workshop edition's launcher is ECHO.exe in Node mode (no window)
+            // that stays alive beside the Mods runtime; it is not a stock ECHO.
+            status.StockRunning = stock > 0 && !(status.ModdedRunning && target.IsWorkshop && windowlessStock == stock);
             if (status.ModdedRunning)
             {
                 var cdp = CdpAsync(target.DebugPort);
@@ -1366,7 +1658,10 @@ namespace Shinawase.Manager
         public static async Task<LaunchOutcome> LaunchAsync(EchoTarget target, CancellationToken token)
         {
             var outcome = new LaunchOutcome { Port = target.DebugPort };
-            if (!File.Exists(target.ModdedExe)) { outcome.Error = "ECHO.modded.exe is missing"; return outcome; }
+            // The Workshop edition has no ECHO.modded.exe: the same host runs as
+            // echo-modded-host.mjs on ECHO's own executable in Node mode.
+            var useNodeHost = !File.Exists(target.ModdedExe) && target.IsWorkshop && File.Exists(target.HostScript) && File.Exists(target.ExePath);
+            if (!File.Exists(target.ModdedExe) && !useNodeHost) { outcome.Error = "ECHO.modded.exe is missing"; return outcome; }
             var status = await StatusAsync(target);
             if (status.ModdedRunning && status.Cdp)
             {
@@ -1378,7 +1673,15 @@ namespace Shinawase.Manager
             Process host;
             try
             {
-                host = Process.Start(new ProcessStartInfo(target.ModdedExe) { WorkingDirectory = target.Root, UseShellExecute = false });
+                if (useNodeHost)
+                {
+                    var info = new ProcessStartInfo(target.ExePath, Proc.Quote(target.HostScript)) { WorkingDirectory = target.Root, UseShellExecute = false, CreateNoWindow = true };
+                    foreach (var pair in EchoNode.Env()) info.EnvironmentVariables[pair.Key] = pair.Value;
+                    info.EnvironmentVariables["ECHO_GAME_ROOT"] = target.Root;
+                    info.EnvironmentVariables["ECHO_MOD_HOME"] = target.LoaderRoot;
+                    host = Process.Start(info);
+                }
+                else host = Process.Start(new ProcessStartInfo(target.ModdedExe) { WorkingDirectory = target.Root, UseShellExecute = false });
             }
             catch (Exception error) { outcome.Error = error.Message; return outcome; }
             outcome.Started = true;
@@ -1393,7 +1696,7 @@ namespace Shinawase.Manager
                 {
                     var code = host.ExitCode;
                     if (code == 4) outcome.Error = L.T("toast.alreadyRunning");
-                    else if (code != 0) outcome.Error = "ECHO.modded.exe exit " + code + " (" + Path.Combine(target.LoaderRoot, "Logs", "modded-host.log") + ")";
+                    else if (code != 0) outcome.Error = (useNodeHost ? "echo-modded-host.mjs" : "ECHO.modded.exe") + " exit " + code + " (" + Path.Combine(target.LoaderRoot, "Logs", "modded-host.log") + ")";
                     if (code != 0) break;
                 }
                 await Task.Delay(800, token);
@@ -1435,6 +1738,11 @@ namespace Shinawase.Manager
                 }
                 else Fs.DeleteTree(target.LoaderRoot);
             }
+            // An enabled ShinawaseLoader Workshop item would reinstall the Loader on
+            // ECHO's next start; this marker (workshop-bootstrap.mjs OPT_OUT_FILE)
+            // stops that until the user installs again on purpose.
+            try { File.WriteAllText(Path.Combine(target.Root, ".shinawase-uninstalled"), DateTime.UtcNow.ToString("o", CultureInfo.InvariantCulture) + Environment.NewLine); }
+            catch (Exception error) { Log.Warn("uninstall marker: " + error.Message); }
             target.Refresh();
         }
     }

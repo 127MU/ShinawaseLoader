@@ -92,7 +92,7 @@ const readChoice = (items, hint) => new Promise((resolve) => {
 });
 
 const loaderDir = dirname(fileURLToPath(import.meta.url));
-const loaderVersion = '1.8.1';
+const loaderVersion = '1.8.1.1';
 const DEFAULT_MARKET_CATALOG_URL = 'https://echo.shiinasuki.com/mod-market/index.json';
 // Last verified Steam host. Do not treat FileVersion as an Electron ABI.
 // Isolated runtime tracks the installed asar/exe via runtime-sync.mjs.
@@ -889,13 +889,18 @@ const openCdpSession = async (webSocketUrl) => {
     pending.delete(message.id);
     if (message.error) entry.reject(new Error(message.error.message || entry.method)); else entry.resolve(message.result);
   });
+  // A closed WebSocket drops send() silently, so a call on it would only end at
+  // cdpTimeoutMs; the flag lets the session cache replace it right away.
+  let closed = false;
   const failAll = (reason) => {
     for (const entry of pending.values()) entry.reject(new Error(reason));
     pending.clear();
   };
-  socket.addEventListener('close', () => failAll('cdp_socket_closed'), { once: true });
-  socket.addEventListener('error', () => failAll('cdp_socket_error'));
+  socket.addEventListener('close', () => { closed = true; failAll('cdp_socket_closed'); }, { once: true });
+  socket.addEventListener('error', () => { closed = true; failAll('cdp_socket_error'); });
   const call = (method, params) => {
+    // Never sent, so it is always safe to retry on a new session.
+    if (closed) return Promise.reject(new Error('cdp_session_closed'));
     const id = ++sequence;
     return withTimeout(new Promise((resolvePromise, reject) => {
       pending.set(id, { resolve: resolvePromise, reject, method });
@@ -908,12 +913,58 @@ const openCdpSession = async (webSocketUrl) => {
       if (result?.exceptionDetails) throw new Error(result.exceptionDetails.exception?.description || result.exceptionDetails.text || 'echo_renderer_evaluation_failed');
       return result;
     },
-    close: () => { try { socket.close(); } catch {} },
+    get closed() { return closed; },
+    close: () => { closed = true; try { socket.close(); } catch {} },
   };
 };
+// One-off session, for targets other than ECHO's renderer (the main-process
+// inspector).
 const cdpEvaluate = async (webSocketUrl, expression) => {
   const session = await openCdpSession(webSocketUrl);
   try { return await session.evaluate(expression); } finally { session.close(); }
+};
+// ECHO's renderer keeps one CDP session per target (approach from PR #37 by
+// Aliang-re). Attaching and detaching a DevTools session on every injection
+// cycle or API call made ECHO tear down and re-create its lyrics provider, so
+// the lyrics page flashed every injectIntervalMs on the same track. A session
+// is replaced as soon as its socket closes or a call on it fails, and dropped
+// when its target goes away.
+const cdpSessionCache = new Map();
+const cdpSessionFor = async (webSocketUrl) => {
+  const existing = cdpSessionCache.get(webSocketUrl);
+  if (existing && !existing.closed) return existing;
+  if (existing) cdpSessionCache.delete(webSocketUrl);
+  const session = await openCdpSession(webSocketUrl);
+  cdpSessionCache.set(webSocketUrl, session);
+  return session;
+};
+const closeCdpSession = (webSocketUrl) => {
+  const session = cdpSessionCache.get(webSocketUrl);
+  cdpSessionCache.delete(webSocketUrl);
+  try { session?.close(); } catch {}
+};
+const pruneCdpSessions = (targets) => {
+  const live = new Set(targets.map((target) => target.webSocketDebuggerUrl));
+  for (const webSocketUrl of [...cdpSessionCache.keys()]) {
+    if (!live.has(webSocketUrl)) closeCdpSession(webSocketUrl);
+  }
+};
+// Evaluates on the shared session. Any transport failure (closed socket,
+// timeout) replaces the session; only a call that was never sent is retried,
+// because an expression that may already have run (a player command) must not
+// run twice. Script exceptions reach the caller unchanged.
+const isCdpTransportError = (error) => /^cdp_/u.test(String(error?.message || ''));
+const rendererEvaluate = async (webSocketUrl, expression) => {
+  for (let attempt = 0; ; attempt += 1) {
+    const session = await cdpSessionFor(webSocketUrl);
+    try {
+      return await session.evaluate(expression);
+    } catch (error) {
+      if (!session.closed && !isCdpTransportError(error)) throw error;
+      closeCdpSession(webSocketUrl);
+      if (attempt >= 1 || error?.message !== 'cdp_session_closed') throw error;
+    }
+  }
 };
 // Main is ECHO's own renderer document only. Every other page target - account
 // and Workshop login windows on third-party sites, data: popups, the desktop
@@ -1454,7 +1505,7 @@ const removeInjected = async (id) => {
   let targets = [];
   try { targets = await cdpMainTargets(); } catch { return; }
   for (const target of targets) {
-    await cdpEvaluate(target.webSocketDebuggerUrl, `(() => {
+    await rendererEvaluate(target.webSocketDebuggerUrl, `(() => {
       const mod = window.__echoExternalMods?.[${JSON.stringify(id)}];
       try { mod?.dispose?.(); } catch {}
       if (${JSON.stringify(id)} === 'echo.listen-together') {
@@ -1818,11 +1869,21 @@ const injectEnabled = async () => {
     lastInjectedTargetCount = targets.length;
     log('INFO', `ECHO main targets=${targets.length}, enabledPackages=${plans.length}`);
   }
+  pruneCdpSessions(targets);
   for (const target of targets) {
+    const webSocketUrl = target.webSocketDebuggerUrl;
     let session;
-    try { session = await openCdpSession(target.webSocketDebuggerUrl); } catch { continue; }
+    try { session = await cdpSessionFor(webSocketUrl); } catch { continue; }
     try {
-      const probe = await session.evaluate(targetProbeExpression).catch(() => null);
+      let probe = null;
+      try {
+        probe = await session.evaluate(targetProbeExpression);
+      } catch (error) {
+        // A dead socket only fails at cdpTimeoutMs; replace it now so the next
+        // cycle injects on a new session instead of stalling on this one.
+        if (session.closed || isCdpTransportError(error)) closeCdpSession(webSocketUrl);
+        continue;
+      }
       const targetState = probe?.result?.value;
       if (targetState?.ready !== true) continue;
       lastCycleReadyCount += 1;
@@ -1837,7 +1898,13 @@ const injectEnabled = async () => {
         if (!uiReloaded && targetState.mods?.[plan.id] === plan.signature) continue;
         await injectIntoTarget(session, plan, { force: uiReplaced }).catch((error) => log('WARN', `inject ${plan.id}: ${error.message}`, error));
       }
-    } finally { session.close(); }
+    } catch (error) {
+      // Same reporting as before (noteIntervalInjectionFailure), on a new session next time.
+      closeCdpSession(webSocketUrl);
+      throw error;
+    } finally {
+      if (session.closed) closeCdpSession(webSocketUrl);
+    }
   }
   loaderStats.injects += 1;
   loaderStats.lastInjectAt = Date.now();
@@ -1869,7 +1936,7 @@ const rendererValue = async (expression) => {
   const targets = await cdpMainTargets();
   const target = targets.find((candidate) => !String(candidate.url || '').startsWith('devtools://')) || targets[0];
   if (!target) throw new Error('echo_renderer_not_ready');
-  const result = await cdpEvaluate(target.webSocketDebuggerUrl, expression);
+  const result = await rendererEvaluate(target.webSocketDebuggerUrl, expression);
   if (result?.exceptionDetails) throw new Error(result.exceptionDetails.text || 'echo_renderer_evaluation_failed');
   return result?.result?.value;
 };
@@ -2044,10 +2111,15 @@ const startWatch = () => {
   }
   if (watchActive) return;
   watchActive = true;
-  // Poll fast (1s) only while ECHO targets exist but none is past the splash
-  // yet, so mods appear right after startup; settle to injectIntervalMs once
-  // injected or while no ECHO is running at all.
+  // Poll fast (1s) while ECHO targets exist but none is past the splash yet,
+  // and during the first minute before ECHO shows a page at all (the bridge
+  // starts the Loader before ECHO's window), so mods appear right after
+  // startup even with a long injectIntervalMs (idea from PR #37). Settle to
+  // injectIntervalMs once injected, or when no ECHO appears.
   const fastPollMs = Math.min(1000, injectIntervalMs);
+  const startupWindowMs = 60000;
+  const watchStartedAt = Date.now();
+  let everReady = false;
   const tick = async () => {
     try {
       await requestInjection('interval');
@@ -2058,7 +2130,9 @@ const startWatch = () => {
     } catch (error) {
       noteIntervalInjectionFailure(error);
     }
-    const startupPending = lastCycleTargetCount > 0 && lastCycleReadyCount === 0;
+    if (lastCycleReadyCount > 0) everReady = true;
+    const startupPending = lastCycleReadyCount === 0
+      && (lastCycleTargetCount > 0 || (!everReady && Date.now() - watchStartedAt < startupWindowMs));
     watchTimer = setTimeout(tick, startupPending ? fastPollMs : injectIntervalMs);
   };
   watchTimer = setTimeout(tick, startupDelayMs);

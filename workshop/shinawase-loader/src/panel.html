@@ -1,0 +1,39 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <link rel="stylesheet" href="panel.css">
+</head>
+<body>
+  <main>
+    <header>
+      <h1>ShinawaseLoader</h1>
+      <p id="subtitle"></p>
+    </header>
+    <section class="card" id="state-card">
+      <div class="state-line"><span class="dot" id="state-dot"></span><strong id="state-title"></strong></div>
+      <p id="state-detail"></p>
+      <div class="progress" id="progress" hidden><span id="progress-bar"></span></div>
+      <dl>
+        <dt id="label-installed"></dt><dd id="value-installed">-</dd>
+        <dt id="label-bundled"></dt><dd id="value-bundled">-</dd>
+        <dt id="label-folder"></dt><dd id="value-folder">-</dd>
+      </dl>
+    </section>
+    <section class="actions">
+      <button type="button" id="restart-now" class="primary"></button>
+      <button type="button" id="restart-later"></button>
+      <button type="button" id="install"></button>
+    </section>
+    <label class="toggle">
+      <input type="checkbox" id="auto-switch">
+      <span id="auto-switch-label"></span>
+    </label>
+    <p class="hint" id="auto-switch-hint"></p>
+    <p class="error" id="error" hidden></p>
+    <p class="hint" id="footer"></p>
+  </main>
+  <script src="__bridge__.js"></script>
+  <script src="panel.js"></script>
+</body>
+</html>

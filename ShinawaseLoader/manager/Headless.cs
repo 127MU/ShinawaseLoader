@@ -3,6 +3,8 @@
 //   ShinawaseManager.exe --headless detect
 //   ShinawaseManager.exe --headless probe
 //   ShinawaseManager.exe --headless install --echo "<ECHO_ROOT>" [--packages a,b | --no-packages] [--steam] [--remote] [--no-probe]
+//   ShinawaseManager.exe --headless install --echo "<ECHO_ROOT>" --edition workshop [--zip "<shinawase-workshop.zip>"] [--launch] [--remote]
+//     (the Workshop edition asks for approval in ECHO's own window; someone must confirm it there)
 //   ShinawaseManager.exe --headless steam-status --echo "<ECHO_ROOT>"
 //   ShinawaseManager.exe --headless steam-apply --echo "<ECHO_ROOT>" [--restore]
 //   ShinawaseManager.exe --headless uninstall --echo "<ECHO_ROOT>"
@@ -59,7 +61,7 @@ namespace Shinawase.Manager
 
         private static JObject Describe(EchoTarget t)
         {
-            return Obj("exe", t.ExePath, "root", t.Root, "echoVersion", t.EchoVersion, "playtest", t.IsPlaytest, "rank", t.Rank, "loader", t.LoaderVersion, "host", t.HasHost, "runtime", t.HasRuntime);
+            return Obj("exe", t.ExePath, "root", t.Root, "echoVersion", t.EchoVersion, "playtest", t.IsPlaytest, "rank", t.Rank, "loader", t.LoaderVersion, "host", t.HasHost, "runtime", t.HasRuntime, "edition", t.Edition);
         }
 
         public static int Run(Options options)
@@ -172,7 +174,15 @@ namespace Shinawase.Manager
                 SetSteam = options.Has("--steam"),
                 Mode = target.Installed ? "repair" : "install",
                 PackageDirs = new List<string> { Path.Combine(root ?? source, "examples", "packages"), Path.Combine(root ?? source, "packages") },
+                Edition = options.Get("--edition") == "workshop" ? "workshop" : "external",
+                WorkshopZip = options.Get("--zip") ?? WorkshopPackage.Find(source),
+                Launch = options.Has("--launch"),
             };
+            if (plan.Edition == "workshop")
+            {
+                plan.SetSteam = false;
+                plan.UseRemote = plan.UseRemote || plan.WorkshopZip == null;
+            }
             var installer = new Installer(net, prefs);
             installer.Prepare(plan);
             foreach (var step in installer.Steps)
@@ -188,7 +198,7 @@ namespace Shinawase.Manager
             target.Refresh();
             Emit(Obj("event", "result", "ok", result.Ok, "failedStep", result.FailedStep, "error", result.Error, "loader", result.LoaderVersion, "echoVersion", result.EchoVersion,
                 "packages", result.PackagesInstalled, "warnings", result.Warnings.Cast<object>().ToList(), "steamApplied", result.SteamApplied, "steamPending", result.SteamPending,
-                "accessDenied", result.AccessDenied, "target", Describe(target)));
+                "accessDenied", result.AccessDenied, "workshopImported", result.WorkshopImported, "switched", result.Switched, "target", Describe(target)));
             return result.Ok ? 0 : 1;
         }
     }

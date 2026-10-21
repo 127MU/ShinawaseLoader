@@ -7,5 +7,12 @@
   "injectCornerIcon": false,
   "closeDrawerOnRematch": false,
   "notify": true,
-  "locale": "auto"
+  "locale": "auto",
+  "normalizeEnabled": true,
+  "normalizeTraditional": false,
+  "normalizeKana": "off",
+  "normalizeNoise": true,
+  "normalizeKeepVersion": true,
+  "normalizeIncludeArtist": false,
+  "normalizeDebug": false
 }

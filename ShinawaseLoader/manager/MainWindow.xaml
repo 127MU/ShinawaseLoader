@@ -758,6 +758,21 @@
               <!-- options -->
               <ScrollViewer x:Name="ViewOptions" Visibility="Collapsed">
                 <StackPanel Margin="0,0,14,0">
+                  <Border Style="{StaticResource Card}" Margin="0,0,0,10">
+                    <StackPanel>
+                      <Grid>
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                        <TextBlock Style="{StaticResource H3}" Text="{DynamicResource s.wiz.edition}" VerticalAlignment="Center"/>
+                        <Border Grid.Column="1" Style="{StaticResource SegmentHost}">
+                          <StackPanel Orientation="Horizontal">
+                            <RadioButton x:Name="OptEditionExternal" Style="{StaticResource Segment}" GroupName="edition" Content="{DynamicResource s.wiz.editionExternal}"/>
+                            <RadioButton x:Name="OptEditionWorkshop" Style="{StaticResource Segment}" GroupName="edition" Content="{DynamicResource s.wiz.editionWorkshop}"/>
+                          </StackPanel>
+                        </Border>
+                      </Grid>
+                      <TextBlock x:Name="OptEditionDesc" Style="{StaticResource Desc}" Margin="0,8,0,0" TextWrapping="Wrap" Text=" "/>
+                    </StackPanel>
+                  </Border>
                   <Border x:Name="OptLatestRow" CornerRadius="14" Background="{DynamicResource B.AccentSoft}" Padding="16,14" Margin="0,0,0,6">
                     <Grid>
                       <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
@@ -766,6 +781,7 @@
                       <CheckBox x:Name="OptLatest" Grid.Column="2" Style="{StaticResource Switch}"/>
                     </Grid>
                   </Border>
+                  <StackPanel x:Name="OptExternalOnly">
                   <DockPanel Margin="4,14,0,8">
                     <Button x:Name="PkgInstallAll" DockPanel.Dock="Right" Style="{StaticResource Link}" Content="{DynamicResource s.wiz.installAll}"/>
                     <TextBlock Style="{StaticResource Section}" Margin="0" Text="{DynamicResource s.wiz.packages}"/>
@@ -793,9 +809,11 @@
                       </DataTemplate>
                     </ItemsControl.ItemTemplate>
                   </ItemsControl>
+                  </StackPanel>
                   <TextBlock Style="{StaticResource Section}" Margin="4,14,0,8" Text="{DynamicResource s.wiz.integration}"/>
                   <Border CornerRadius="14" Background="{DynamicResource B.Surface2}" BorderBrush="{DynamicResource B.Border}" BorderThickness="1" Padding="16,6">
                     <StackPanel>
+                      <StackPanel x:Name="OptIntegrationExternal">
                       <Grid Margin="0,8">
                         <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                         <StackPanel><TextBlock FontWeight="SemiBold" Text="{DynamicResource s.wiz.optSteam}"/><TextBlock Style="{StaticResource Desc}" Text="{DynamicResource s.wiz.optSteamDesc}"/></StackPanel>
@@ -814,6 +832,7 @@
                         <CheckBox x:Name="OptDesktop" Grid.Column="1" Style="{StaticResource Switch}"/>
                       </Grid>
                       <Border Style="{StaticResource Divider}" Margin="0,2"/>
+                      </StackPanel>
                       <Grid Margin="0,8">
                         <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                         <StackPanel><TextBlock FontWeight="SemiBold" Text="{DynamicResource s.wiz.optLaunch}"/><TextBlock Style="{StaticResource Desc}" Text="{DynamicResource s.wiz.optLaunchDesc}"/></StackPanel>

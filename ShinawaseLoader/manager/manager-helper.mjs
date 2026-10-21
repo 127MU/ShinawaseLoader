@@ -6,6 +6,7 @@
 //
 //   node manager-helper.mjs check [--official] [--mirrors a,b]
 //   node manager-helper.mjs fetch --dest <dir> [--packages id,id] [--no-loader] [--cache <dir>] [--official] [--mirrors a,b]
+//   node manager-helper.mjs fetch-workshop --dest <file.zip> [--cache <dir>] [--official] [--mirrors a,b]
 //
 // Prints one JSON object per line; the last line has "event": "result".
 import { mkdirSync, writeFileSync } from 'node:fs';
@@ -13,10 +14,12 @@ import { tmpdir } from 'node:os';
 import { basename, dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { readZip } from '../echomod-archive.mjs';
+import { inspectWorkshopZip } from '../workshop-setup.mjs';
 import {
   DEFAULT_UPDATE_MIRRORS,
   UPDATE_PACKAGES,
   UPDATE_REPO,
+  WORKSHOP_ARCHIVE,
   createDeadline,
   createSourceHealth,
   fetchBuffer,
@@ -59,6 +62,12 @@ export const extractLoaderTree = (entries, destRoot) => {
     written += 1;
   }
   return written;
+};
+
+// GitHub carries the Workshop edition as a release asset of the same version.
+export const githubWorkshopSources = (official) => {
+  const direct = { id: 'github', url: `https://github.com/${UPDATE_REPO}/releases/latest/download/${WORKSHOP_ARCHIVE}` };
+  return official ? [direct] : [{ id: 'ghproxy', url: `https://ghproxy.net/${direct.url}` }, direct];
 };
 
 export const loaderVersionOf = (entries) => {
@@ -122,6 +131,7 @@ const run = async () => {
         mirror,
         via: 'mirror',
         remote: mirror.manifest.loader.version,
+        workshop: mirror.manifest.workshop,
         packages: UPDATE_PACKAGES.map((item) => {
           const entry = mirror.manifest.packages.find((candidate) => candidate.id === item.id);
           return entry ? { id: item.id, version: entry.version, file: entry.file, sha256: entry.sha256, size: entry.size } : { id: item.id, version: null, file: item.file };
@@ -137,12 +147,39 @@ const run = async () => {
         packages.push({ id: item.id, version: null, file: item.file });
       }
     }
-    return { mirror: null, via: 'github', remote, packages };
+    return { mirror: null, via: 'github', remote, packages, workshop: null };
   };
 
   if (command === 'check') {
     const info = await inspect();
-    emit({ event: 'result', ok: true, remote: info.remote, via: info.mirror ? info.mirror.base : info.via, packages: info.packages.map(({ id, version }) => ({ id, version })) });
+    emit({ event: 'result', ok: true, remote: info.remote, via: info.mirror ? info.mirror.base : info.via, packages: info.packages.map(({ id, version }) => ({ id, version })), workshop: info.workshop ? info.workshop.loaderVersion : null });
+    return;
+  }
+  if (command === 'fetch-workshop') {
+    const dest = option('--dest');
+    if (!dest) throw new Error('--dest is required');
+    emit({ event: 'stage', stage: 'check', label: 'manifest' });
+    const info = await inspect();
+    emit({ event: 'stage', stage: 'workshop', label: `ShinawaseLoader Workshop ${info.remote}` });
+    const candidates = [];
+    if (info.mirror && info.workshop) candidates.push({ id: info.mirror.id, url: `${info.mirror.base}/${info.workshop.archive}`, sha256: info.workshop.sha256, size: info.workshop.size });
+    for (const github of githubWorkshopSources(official)) candidates.push(github);
+    const cacheDir = option('--cache') || join(tmpdir(), 'shinawase-manager-cache');
+    const target = resolve(dest);
+    let inspected = null;
+    const fetched = await fetchFirstValid(candidates, net({
+      cacheDir,
+      cacheName: 'workshop',
+      maxBytes: 512 * 1024 * 1024,
+      validate: (data) => {
+        mkdirSync(dirname(target), { recursive: true });
+        writeFileSync(target, data);
+        const found = inspectWorkshopZip(target);
+        if (found.loaderVersion !== info.remote) throw new Error('update_archive_version_mismatch');
+        inspected = found;
+      },
+    }));
+    emit({ event: 'result', ok: true, path: target, version: inspected.version, loaderVersion: inspected.loaderVersion, via: fetched.source.id });
     return;
   }
   if (command !== 'fetch') throw new Error(`unknown command ${command}`);

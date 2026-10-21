@@ -40,3 +40,5 @@ ShinawaseLoader/.api-token
 /Mods/
 /Plugins/
 /ShinawaseLoader/Logs/
+/workshop/*/content/
+/workshop/*/.echo-sdk/

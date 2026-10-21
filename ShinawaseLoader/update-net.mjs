@@ -13,6 +13,10 @@ export const UPDATE_PACKAGES = [
   { id: 'echo.lyrics-match-whitebox', manifest: 'examples/ECHO-LyricsMatchWhitebox/echomod/echo.mod.json', file: 'examples/packages/ECHO-LyricsMatchWhitebox.echomod' },
 ];
 
+// The ECHO Workshop edition of the same release (scripts/build-workshop-item.mjs).
+// The mirror lists it in the signed manifest; GitHub serves it as a release asset.
+export const WORKSHOP_ARCHIVE = 'shinawase-workshop.zip';
+
 // Tried first; GitHub (through the ghproxy mirror, then directly) is the fallback.
 // Override with `updateMirrors` in loader.config.json or SHINAWASE_UPDATE_MIRRORS
 // (comma separated); an empty list disables the mirror.
@@ -296,7 +300,12 @@ export const parseMirrorManifest = (bytes, signatureText, publicKeyPem = UPDATE_
   }
   const packages = (Array.isArray(manifest.packages) ? manifest.packages : []).filter((item) =>
     UPDATE_PACKAGES.some((known) => known.id === item?.id) && typeof item?.version === 'string' && isSafeRel(item?.file) && isHash(item?.sha256));
-  return { schema: 1, generatedAt: manifest.generatedAt || null, loader: { version: loader.version, archive: loader.archive, sha256: loader.sha256, size: Number(loader.size) || 0 }, packages: packages.map((item) => ({ id: item.id, version: item.version, file: item.file, sha256: item.sha256, size: Number(item.size) || 0 })) };
+  // Optional: mirrors built before the Workshop edition have no entry.
+  const workshop = manifest.workshop;
+  const workshopEntry = workshop && typeof workshop.version === 'string' && typeof workshop.loaderVersion === 'string' && isSafeRel(workshop.archive) && isHash(workshop.sha256)
+    ? { version: workshop.version, loaderVersion: workshop.loaderVersion, archive: workshop.archive, sha256: workshop.sha256, size: Number(workshop.size) || 0 }
+    : null;
+  return { schema: 1, generatedAt: manifest.generatedAt || null, loader: { version: loader.version, archive: loader.archive, sha256: loader.sha256, size: Number(loader.size) || 0 }, packages: packages.map((item) => ({ id: item.id, version: item.version, file: item.file, sha256: item.sha256, size: Number(item.size) || 0 })), workshop: workshopEntry };
 };
 
 // ---- update lock -----------------------------------------------------------

@@ -83,7 +83,11 @@ namespace Shinawase.Manager
         private ContentControl HeroPrimarySpin, TileLoaderSpin, SetReprobeSpin, SteamApplySpin, DialogBody, DoneSteamSpin;
         private ItemsControl ModsList, BundledList, SteamAccounts, NodeSources, MirrorList, TargetsList, PkgList, StepsList;
         private CheckBox SetAutoMirror, SetShinawase, SetAutoCheck, SetLoaderAuto, SetMotion, OptLatest, OptSteam, OptShortcut, OptDesktop, OptLaunch;
-        private RadioButton NavHome, NavMods, NavSteam, NavSettings, NavAbout, LangZh, LangEn, SetLangZh, SetLangEn, ThemeSystem, ThemeLight, ThemeDark;
+        private RadioButton NavHome, NavMods, NavSteam, NavSettings, NavAbout, LangZh, LangEn, SetLangZh, SetLangEn, ThemeSystem, ThemeLight, ThemeDark, OptEditionExternal, OptEditionWorkshop;
+        private StackPanel OptExternalOnly, OptIntegrationExternal;
+        private TextBlock OptEditionDesc;
+        private string wizardEdition = "external";
+        private string workshopZip;
         private TextBox SteamLine, LogBox;
         private Image AboutLogo;
         private Canvas HeroArt;
@@ -253,6 +257,8 @@ namespace Shinawase.Manager
             SheetClose.Click += (s, e) => CloseSheetRequested();
             SheetBack.Click += (s, e) => SheetBackAction();
             SheetNext.Click += (s, e) => SheetNextAction();
+            OptEditionExternal.Checked += (s, e) => { if (!syncingRadios) ApplyEdition("external"); };
+            OptEditionWorkshop.Checked += (s, e) => { if (!syncingRadios) ApplyEdition("workshop"); };
             SheetAux.Click += (s, e) => SheetAuxAction();
             TargetBrowse.Click += (s, e) => BrowseTarget();
             TargetRescan.Click += async (s, e) => { await Rescan(null); TargetsList.ItemsSource = null; TargetsList.ItemsSource = targets; UpdateSheetFooter(); };
@@ -1039,6 +1045,25 @@ namespace Shinawase.Manager
             OptShortcut.IsChecked = true;
             OptDesktop.IsChecked = File.Exists(Shortcuts.DesktopPath());
             OptLaunch.IsChecked = sheetMode == "install";
+            // An existing install keeps its edition; new installs start external.
+            workshopZip = WorkshopPackage.Find(sourceDir);
+            var edition = target != null && target.Installed && target.IsWorkshop ? "workshop" : "external";
+            syncingRadios = true;
+            OptEditionExternal.IsChecked = edition == "external";
+            OptEditionWorkshop.IsChecked = edition == "workshop";
+            syncingRadios = false;
+            ApplyEdition(edition);
+        }
+
+        private void ApplyEdition(string edition)
+        {
+            wizardEdition = edition;
+            var workshop = edition == "workshop";
+            OptExternalOnly.Visibility = workshop ? Visibility.Collapsed : Visibility.Visible;
+            OptIntegrationExternal.Visibility = workshop ? Visibility.Collapsed : Visibility.Visible;
+            OptEditionDesc.Text = workshop
+                ? (workshopZip == null ? L.T("wiz.editionWorkshopDesc") + " " + L.T("wiz.editionWorkshopDownload") : L.T("wiz.editionWorkshopDesc"))
+                : L.T("wiz.editionExternalDesc");
         }
 
         private EchoTarget SelectedTarget()
@@ -1322,8 +1347,18 @@ namespace Shinawase.Manager
                 SetSteam = OptSteam.IsChecked == true,
                 Mode = sheetMode ?? "install",
                 PackageDirs = PackageDirs(),
+                Edition = wizardEdition,
+                WorkshopZip = workshopZip,
+                Launch = OptLaunch.IsChecked == true,
             };
-            launchAfterInstall = OptLaunch.IsChecked == true;
+            if (plan.Edition == "workshop")
+            {
+                // No bundled zip: the newest one comes from the mirror or GitHub.
+                plan.UseRemote = plan.UseRemote || workshopZip == null;
+                plan.SetSteam = false;
+            }
+            // The Workshop run switches ECHO to the Mods runtime itself.
+            launchAfterInstall = OptLaunch.IsChecked == true && plan.Edition != "workshop";
             lastPlan = plan;
             lastResult = null;
             installer.Prepare(plan);
@@ -1436,14 +1471,22 @@ namespace Shinawase.Manager
                 DoneTitle.Text = sheetMode == "update" ? L.T("wiz.doneUpdate") : sheetMode == "repair" ? L.T("wiz.doneRepair") : L.T("wiz.doneInstall");
                 DoneSub.Text = L.F("wiz.doneSub", result.LoaderVersion ?? "?");
                 AddSummaryRow("", L.F("wiz.sumLoader", result.LoaderVersion ?? "?"), "B.Success");
-                AddSummaryRow("", L.F("wiz.sumRuntime", result.EchoVersion ?? "?"), "B.Success");
-                AddSummaryRow("", L.T("wiz.sumHost"), "B.Success");
-                if (lastPlan != null && lastPlan.Packages.Any(p => p.IsSelected)) AddSummaryRow("", L.F("wiz.sumPackages", result.PackagesInstalled), "B.Success");
-                if (lastPlan != null && lastPlan.SetSteam)
+                if (lastPlan != null && lastPlan.Edition == "workshop")
                 {
-                    if (result.SteamApplied) AddSummaryRow("", L.T("wiz.sumSteamOn"), "B.Success");
-                    else if (result.SteamPending) AddSummaryRow("", L.T("wiz.sumSteamPending"), "B.Warning");
-                    else AddSummaryRow("", L.T("wiz.sumSteamSkip"), "B.Text3");
+                    AddSummaryRow("", result.WorkshopImported ? L.T("wiz.sumWorkshopImported") : L.T("wiz.sumWorkshopCurrent"), "B.Success");
+                    AddSummaryRow("", result.Switched ? L.T("wiz.sumWorkshopSwitched") : L.T("wiz.sumWorkshopClosed"), result.Switched ? "B.Success" : "B.Text3");
+                }
+                else
+                {
+                    AddSummaryRow("", L.F("wiz.sumRuntime", result.EchoVersion ?? "?"), "B.Success");
+                    AddSummaryRow("", L.T("wiz.sumHost"), "B.Success");
+                    if (lastPlan != null && lastPlan.Packages.Any(p => p.IsSelected)) AddSummaryRow("", L.F("wiz.sumPackages", result.PackagesInstalled), "B.Success");
+                    if (lastPlan != null && lastPlan.SetSteam)
+                    {
+                        if (result.SteamApplied) AddSummaryRow("", L.T("wiz.sumSteamOn"), "B.Success");
+                        else if (result.SteamPending) AddSummaryRow("", L.T("wiz.sumSteamPending"), "B.Warning");
+                        else AddSummaryRow("", L.T("wiz.sumSteamSkip"), "B.Text3");
+                    }
                 }
                 foreach (var warning in result.Warnings) AddSummaryRow("", warning, "B.Warning");
             }
@@ -1602,7 +1645,7 @@ namespace Shinawase.Manager
                     Directory.CreateDirectory(dest);
                     var args = new List<string> { helper, "fetch", "--no-loader", "--dest", dest, "--cache", IOPath.Combine(Paths.UserDataRoot, "update-cache"), "--packages", vm.Id };
                     args.AddRange(net.HelperMirrorArgs());
-                    var fetched = await Proc.RunAsync(current.NodePath, args, dest, null, 10 * 60 * 1000, null, CancellationToken.None);
+                    var fetched = await Proc.RunAsync(current.NodePath, args, dest, current.NodeEnv, 10 * 60 * 1000, null, CancellationToken.None);
                     if (fetched.ExitCode != 0) throw new InvalidOperationException(fetched.Tail(3));
                     Packages.Resolve(new List<PackageInfo> { vm }, PackageDirs(), current);
                     if (vm.LocalPath == null) throw new FileNotFoundException(vm.FileName);

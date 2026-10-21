@@ -6,6 +6,9 @@
 // Output (everything is built from git HEAD so the files always agree):
 //   ShinawaseLoader-main.zip   the ShinawaseLoader/ tree only (a few MB, not the whole repo)
 //   examples/packages/*.echomod  the bundled example packages
+//   shinawase-workshop.zip     the ECHO Workshop edition of the same commit (needs
+//                              ShinawaseLoader/node_modules from npm ci; skip it
+//                              with --no-workshop)
 //   mirror-manifest.json       versions + SHA-256 of every file above
 //   mirror-manifest.sig        Ed25519 signature of mirror-manifest.json (base64)
 //   node/v<ver>/node-v<ver>-win-x64.zip   with --with-node: the Node runtime the installer
@@ -20,7 +23,8 @@ import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { UPDATE_PACKAGES, UPDATE_PUBLIC_KEY, createDeadline, downloadResumable, sha256Hex, verifyDetached } from '../ShinawaseLoader/update-net.mjs';
+import { UPDATE_PACKAGES, UPDATE_PUBLIC_KEY, WORKSHOP_ARCHIVE, createDeadline, downloadResumable, sha256Hex, verifyDetached } from '../ShinawaseLoader/update-net.mjs';
+import { buildWorkshopItem } from './build-workshop-item.mjs';
 
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const args = process.argv.slice(2);
@@ -49,7 +53,7 @@ const git = (gitArgs, options = {}) => {
   return result.stdout;
 };
 
-const dirty = String(git(['status', '--porcelain', '--', 'ShinawaseLoader', 'examples/packages'])).trim();
+const dirty = String(git(['status', '--porcelain', '--', 'ShinawaseLoader', 'examples/packages', 'workshop'])).trim();
 if (dirty) console.warn('warning: uncommitted changes are NOT included (the mirror is built from git HEAD):\n' + dirty);
 
 rmSync(outDir, { recursive: true, force: true });
@@ -83,11 +87,22 @@ for (const item of UPDATE_PACKAGES) {
   packages.push({ id: item.id, version: String(version), file: item.file, sha256: sha256Hex(bytes), size: bytes.length });
 }
 
+// Both editions ship together: the Workshop zip comes from the same commit.
+let workshop = null;
+if (!args.includes('--no-workshop')) {
+  const contentRoot = join(outDir, '.workshop-content');
+  const built = buildWorkshopItem({ ref: 'HEAD', contentRoot, zipPath: join(outDir, WORKSHOP_ARCHIVE) });
+  rmSync(contentRoot, { recursive: true, force: true });
+  if (built.loaderVersion !== String(loaderVersion)) throw new Error('workshop edition version does not match the loader');
+  workshop = { version: built.workshopVersion, loaderVersion: built.loaderVersion, archive: WORKSHOP_ARCHIVE, sha256: built.zip.sha256, size: built.zip.size };
+}
+
 const manifest = {
   schema: 1,
   generatedAt: new Date().toISOString(),
   loader: { version: String(loaderVersion), archive: archiveName, sha256: sha256Hex(archive), size: archive.length },
   packages,
+  ...(workshop ? { workshop } : {}),
 };
 const manifestBytes = Buffer.from(`${JSON.stringify(manifest, null, 2)}\n`);
 const signature = sign(null, manifestBytes, createPrivateKey(readFileSync(keyPath))).toString('base64');
@@ -100,4 +115,5 @@ writeFileSync(join(outDir, 'mirror-manifest.sig'), `${signature}\n`);
 console.log(`mirror built in ${outDir}`);
 console.log(`  loader ${manifest.loader.version}  ${(archive.length / 1048576).toFixed(2)} MB  sha256 ${manifest.loader.sha256.slice(0, 16)}...`);
 for (const item of packages) console.log(`  ${item.id} ${item.version}  ${item.file}`);
+if (workshop) console.log(`  workshop ${workshop.version}  ${(workshop.size / 1048576).toFixed(1)} MB  ${workshop.archive}`);
 console.log('Upload the contents of that folder to the mirror base URL (default https://mirror.shiinasuki.com/shinawase/, IP fallback http://43.248.10.82/shinawase/).');

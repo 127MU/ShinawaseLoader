@@ -9,21 +9,27 @@ const loaderDir = dirname(fileURLToPath(import.meta.url));
 // ECHO's Steam AppId; 5105150 is ECHO Playtest.
 const steamAppId = '5105090';
 
+const readConfig = (loaderRoot) => {
+  try { return JSON.parse(readFileSync(join(loaderRoot, 'loader.config.json'), 'utf8').replace(/^﻿/u, '')); } catch { return {}; }
+};
 const readRuntimePath = (loaderRoot) => {
-  try {
-    const config = JSON.parse(readFileSync(join(loaderRoot, 'loader.config.json'), 'utf8'));
-    const runtimePath = String(config.runtimePath || '').trim();
-    if (runtimePath && existsSync(runtimePath)) return runtimePath;
-  } catch {}
-  return null;
+  const runtimePath = String(readConfig(loaderRoot).runtimePath || '').trim();
+  return runtimePath && existsSync(runtimePath) ? runtimePath : null;
 };
 
-export const resolveHostNode = (loaderRoot, env = process.env) => {
+// Electron reads these at startup: they must reach the helper scripts when the
+// host runs on ECHO's own executable, and never the ECHO it launches.
+const RUN_AS_NODE = 'ELECTRON_RUN_AS_NODE';
+const NO_ASAR = 'ELECTRON_NO_ASAR';
+
+export const resolveHostNode = (loaderRoot, env = process.env, platform = process.platform) => {
   const override = String(env.ECHO_NODE_PATH || '').trim();
   if (override && existsSync(override)) return override;
+  // nodeRuntime "echo": the host itself was started as ECHO-in-Node mode.
+  if (String(readConfig(loaderRoot).nodeRuntime || '').toLowerCase() === 'echo' && env[RUN_AS_NODE] === '1') return process.execPath;
   const configured = readRuntimePath(loaderRoot);
   if (configured) return configured;
-  const bundled = join(loaderRoot, 'node');
+  const bundled = join(loaderRoot, platform === 'win32' ? 'node.exe' : 'node');
   if (existsSync(bundled)) return bundled;
   return process.execPath || 'node';
 };
@@ -33,11 +39,44 @@ export const findIsolatedDarwinBinary = (runtimeRoot) => DARWIN_APP_NAMES
   .filter((file) => existsSync(file))
   .sort((left, right) => rankEchoInstall(left, 'darwin') - rankEchoInstall(right, 'darwin') || left.localeCompare(right))[0] || null;
 
-// Linux keeps the Windows layout: a flat runtime copy with its own ECHO executable.
+// Windows and Linux use a flat runtime copy with its own ECHO executable.
 export const findIsolatedBinary = (runtimeRoot, platform = process.platform) => {
-  if (platform !== 'linux') return findIsolatedDarwinBinary(runtimeRoot);
-  const executable = join(runtimeRoot, 'ECHO');
+  if (platform === 'darwin') return findIsolatedDarwinBinary(runtimeRoot);
+  const executable = join(runtimeRoot, platform === 'win32' ? 'ECHO.exe' : 'ECHO');
   return existsSync(executable) ? executable : null;
+};
+
+const processAlive = (pid) => {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    return error?.code === 'EPERM';
+  }
+};
+
+// --wait-pid <pid>: start only after that process (a running stock ECHO that
+// holds the single-instance lock) has exited. Gives up after timeoutMs.
+export const waitForExit = async (pid, { timeoutMs = 10 * 60 * 1000, pollMs = 400, alive = processAlive } = {}) => {
+  if (!(Number(pid) > 0)) return true;
+  const deadline = Date.now() + timeoutMs;
+  while (alive(Number(pid))) {
+    if (Date.now() >= deadline) return false;
+    await new Promise((resolvePromise) => setTimeout(resolvePromise, pollMs));
+  }
+  return true;
+};
+
+export const splitHostArgs = (argv) => {
+  const args = [];
+  let waitPid = 0;
+  for (let index = 0; index < argv.length; index += 1) {
+    const value = String(argv[index]);
+    if (value === '--wait-pid') { waitPid = Number(argv[index + 1]) || 0; index += 1; continue; }
+    if (value.startsWith('--wait-pid=')) { waitPid = Number(value.slice('--wait-pid='.length)) || 0; continue; }
+    args.push(value);
+  }
+  return { args, waitPid };
 };
 
 const runNodeScript = (node, loaderRoot, scriptName, args, env) => {
@@ -110,9 +149,15 @@ export const launchIsolated = ({
     error.code = 'isolated_runtime_missing';
     throw error;
   }
-  return spawnChild(executable, planModdedLaunchArgs(args), {
+  const echoEnv = { ...childEnv };
+  delete echoEnv[RUN_AS_NODE];
+  delete echoEnv[NO_ASAR];
+  // The ports the Loader attaches to come from its config (defaults 9229/9230).
+  const config = readConfig(loader);
+  const port = (value, fallback) => (Number(value) > 0 && Number(value) < 65536 ? Number(value) : fallback);
+  return spawnChild(executable, planModdedLaunchArgs(args, { debugPort: port(config.debugPort, 9229), inspectPort: port(config.inspectPort, 9230) }), {
     cwd: root,
-    env: childEnv,
+    env: echoEnv,
     stdio: 'inherit',
   });
 };
@@ -121,6 +166,11 @@ const isMain = process.argv[1] && resolve(fileURLToPath(import.meta.url)) === re
 if (isMain) {
   const echoRoot = resolve(process.env.ECHO_GAME_ROOT || join(loaderDir, '..'));
   const loaderRoot = resolve(process.env.ECHO_MOD_HOME || loaderDir);
+  const { args, waitPid } = splitHostArgs(process.argv.slice(2));
+  if (!(await waitForExit(waitPid))) {
+    console.error('echo_still_running');
+    process.exit(4);
+  }
   const lock = acquireLock(loaderRoot);
   if (!lock) process.exit(0);
   const release = () => { try { writeFileSync(lock, ''); } catch {} };
@@ -129,7 +179,7 @@ if (isMain) {
     const child = launchIsolated({
       echoRoot,
       loaderRoot,
-      args: process.argv.slice(2),
+      args,
     });
     child.on('exit', (code) => {
       release();

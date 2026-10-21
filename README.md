@@ -78,6 +78,29 @@ Windows 安装程序会扫描 Steam 库定位 `ECHO.exe` / `ECHO Steam.exe`（�
 .\scripts\build-manager.ps1 -Launch
 ```
 
+### 两个版本：外置注入版与创意工坊版
+
+每次发布同时维护两个版本，版本号相同：
+
+| 版本 | 发布产物 | 启动方式 | 更新 |
+| --- | --- | --- | --- |
+| ① 外置注入版 | `ShinawaseLoader-<版本>.zip`、`ShinawaseSetup-<版本>.exe` | `ECHO.modded.exe`（可写入 Steam 启动项） | Loader 自更新 |
+| ② 创意工坊版 | `shinawase-workshop.zip`（安装器里也自带一份） | ECHO 创意工坊插件「ShinawaseLoader」切换到 Mods 版 | 创意工坊条目 / 安装器 |
+
+**用安装器装创意工坊版：** 在 Shinawase Manager 的安装选项里把「安装方式」选为「创意工坊」（控制台安装器加 `-Edition workshop`）。安装器会启动一次原版 ECHO，把 `shinawase-workshop.zip` 交给 ECHO 自己的创意工坊导入（与拖进创意工坊页面相同），由 ECHO 校验插件包，并在 ECHO 窗口里请你确认「完整系统访问」——安装器不会替你点确定。确认后插件安装 Loader，安装器再关闭原版并以 Mods 版重新打开 ECHO。更新也走同一流程：安装器从下载源取得新的 `shinawase-workshop.zip`（签名镜像优先，其次 GitHub Release），ECHO 会对新版本再请你确认一次。
+
+**直接在 ECHO 里用：** 把 `shinawase-workshop.zip` 拖进 ECHO 的创意工坊页面，或订阅 Steam 创意工坊条目；启用并确认后，侧栏插件页「ShinawaseLoader」可以「立即以 Mods 重启 ECHO」或「下次退出 ECHO 后以 Mods 打开」，也可开启「每次启动原版 ECHO 时自动切换」（切换失败一次会自动暂停）。
+
+创意工坊不允许 `.exe`、`.dll`、`.node`、`.ps1`、`.cmd` 等文件，所以创意工坊版不带 `node.exe`、`ECHO.modded.exe`、原生扩展和管理器：Loader 直接用 ECHO 自带的 Node 运行（`loader.config.json` 记为 `"nodeRuntime": "echo"`）。两个版本共用 `<ECHO>\ShinawaseLoader`，随时可以在安装器里切换；已有更新版本的 Loader、你的配置、状态、日志与已装 Mod 都不会被覆盖或降级。在管理器里卸载会留下 `.shinawase-uninstalled` 标记，防止仍启用的创意工坊条目在下次启动时自动重装；重新安装即清除。
+
+构建（需要先 `npm --prefix .\ShinawaseLoader ci`）：
+
+```powershell
+node .\scripts\build-workshop-item.mjs --sdk "<ECHO_ROOT>\resources\workshop-sdk"
+```
+
+产物是 `workshop\shinawase-loader\content`（作者工具项目内容）和 `dist\shinawase-workshop.zip`。`build-release.bat` 会一并生成并放进安装器，`build-update-mirror.mjs` 会把同一提交的 `shinawase-workshop.zip` 签名发布到镜像。发布到 Steam 创意工坊在 ECHO 的作者工具中完成，脚本本身不会上传任何内容。
+
 ### 控制台安装器
 
 带参数运行 `setup-modloader.bat` 时仍是原来的 PowerShell 安装器：
@@ -344,6 +367,8 @@ flowchart TB
 │   ├── startup-splash.html    # 启动卡片：页面与动画（?demo=1 可在浏览器预览）
 │   ├── streaming-bridge.ts
 │   ├── streaming-preload.cjs
+│   ├── workshop-bootstrap.mjs # 创意工坊版的安装与切换逻辑
+│   ├── workshop-setup.mjs     # 安装器的创意工坊版安装、更新与切换
 │   ├── testing/               # 自动化测试 SDK（harness / validate / client / session / cli）
 │   ├── manager/               # Shinawase Manager（WPF 图形安装 / 管理器源码与 Node 辅助脚本）
 │   ├── mod-template/
@@ -358,6 +383,7 @@ flowchart TB
 │   ├── build-release.ps1
 │   ├── build-native-host.ps1
 │   ├── build-streaming-bridge.mjs
+│   ├── build-workshop-item.mjs # 生成创意工坊条目 content/
 │   ├── cdp-eval.mjs
 │   └── verify-echo-runtime.mjs
 ├── examples/                  # 官方示例（不随安装复制）
@@ -365,6 +391,7 @@ flowchart TB
 │   ├── ECHO-Streaming/
 │   ├── packages/              # 预装包：Streaming / MV / Lyrics Match Whitebox
 │   └── reference/             # 归档参考 Mod（不进安装器可选包）
+├── workshop/shinawase-loader/ # ECHO 创意工坊条目（src/ 受信引导模块与插件页；content/ 为构建产物）
 ├── tests/                     # 仓库自测（node --test "tests/*.test.mjs"，纯离线）
 ├── setup-modloader.bat
 ├── pack-mod.bat

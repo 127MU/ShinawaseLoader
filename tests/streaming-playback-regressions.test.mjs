@@ -75,3 +75,35 @@ test('status refresh cannot consume similar autoplay changes and repeated ticks 
   }
   assert.deepEqual(requested, ['1', '2', '3']);
 });
+
+test('a streaming replay never starts inside the last seconds of the track', async () => {
+  // ECHO's repeat-one restart resumes from the last status position, which for
+  // a streaming track lands ~1.4s before the end.
+  const { createRequire } = await import('node:module');
+  const require = createRequire(import.meta.url);
+  const previous = globalThis.__shinawasePlaybackShim;
+  delete globalThis.__shinawasePlaybackShim;
+  try {
+    const handlers = new Map();
+    const seen = [];
+    const ipcMain = {
+      _invokeHandlers: handlers,
+      handle(channel, fn) { handlers.set(channel, fn); },
+      removeHandler(channel) { handlers.delete(channel); },
+    };
+    handlers.set('playback:play-media-item', async (_event, raw) => { seen.push(raw.startSeconds); return { ok: true }; });
+    handlers.set('playback:resolve-media-item', async () => ({}));
+    const { installStreamingPlaybackShim } = require('../ShinawaseLoader/playback-shim.cjs');
+    assert.equal(installStreamingPlaybackShim({ ipcMain }).play, true);
+    const play = (item, startSeconds) => handlers.get('playback:play-media-item')({}, { item, startSeconds });
+    const streaming = { mediaType: 'streaming', provider: 'netease', providerTrackId: '1', duration: 170.37 };
+    await play(streaming, 169.003);
+    await play(streaming, 90);
+    await play(streaming, undefined);
+    await play({ mediaType: 'local', path: 'D:/a.flac', duration: 170.37 }, 169.003);
+    await play({ ...streaming, duration: 4 }, 2);
+    assert.deepEqual(seen, [0, 90, undefined, 169.003, 2]);
+  } finally {
+    globalThis.__shinawasePlaybackShim = previous;
+  }
+});

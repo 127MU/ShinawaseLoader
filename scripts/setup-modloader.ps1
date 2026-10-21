@@ -3,6 +3,12 @@ param(
   [ValidateSet('install', 'update', 'uninstall', 'check', 'launch', 'menu')]
   [string]$Action = 'menu',
   [string]$EchoRoot,
+  # external: ECHO.modded.exe + isolated runtime (default).
+  # workshop: import shinawase-workshop.zip through ECHO's own Workshop page; ECHO
+  # asks for the system:full approval in its window and the item installs the Loader.
+  [ValidateSet('external', 'workshop')]
+  [string]$Edition = 'external',
+  [string]$WorkshopZip,
   [switch]$Force,
   # Accepted for older callers. Install always builds an isolated runtime and
   # never patches the Steam resources\app.asar.
@@ -95,6 +101,12 @@ $script:Strings = @{
     steamGuideClipboardFail = '未能写入剪贴板喵，请手动复制上面那一行。'
     steamGuideLaunchAsk = '现在直接启动 ECHO.modded.exe？(Y/N，默认 N)'
     steamGuideFallback = '也可双击游戏目录下的 ECHO.modded.exe，或运行 ShinawaseLoader\start-echo-with-mods.cmd'
+    wsEcho = '正在启动原版 ECHO（仅用于本次创意工坊安装）'
+    wsImport = 'ECHO 正在导入并验证 shinawase-workshop.zip'
+    wsApprove = '请在 ECHO 窗口中点“确定”，授予 ShinawaseLoader 完整系统访问'
+    wsLoader = '创意工坊插件正在安装 Loader'
+    wsSwitch = '正在切换到 Mods 版 ECHO'
+    wsDone = '创意工坊版安装完成：Loader {0}'
   }
   en = @{
     choose = 'Choose language'
@@ -163,6 +175,12 @@ $script:Strings = @{
     steamGuideClipboardFail = 'Could not write the clipboard; copy the line above manually.'
     steamGuideLaunchAsk = 'Launch ECHO.modded.exe now? (Y/N, default N)'
     steamGuideFallback = 'Or double-click ECHO.modded.exe in the game folder, or run ShinawaseLoader\start-echo-with-mods.cmd'
+    wsEcho = 'Starting stock ECHO for the Workshop install'
+    wsImport = 'ECHO is importing and verifying shinawase-workshop.zip'
+    wsApprove = 'Choose OK in the ECHO window to grant ShinawaseLoader full system access'
+    wsLoader = 'The Workshop item is installing the Loader'
+    wsSwitch = 'Switching ECHO to the Mods runtime'
+    wsDone = 'Workshop edition installed: Loader {0}'
   }
 }
 function Get-LoaderLocale {
@@ -1487,12 +1505,57 @@ function Invoke-Menu {
   }
 }
 
+# Workshop edition: the same steps as the Shinawase Manager (workshop-setup.mjs),
+# run on ECHO's own executable in Node mode, so no Node download is needed.
+function Install-WorkshopEdition([string]$echoExe, [bool]$launch) {
+  $zip = $WorkshopZip
+  if (-not $zip) {
+    foreach ($candidate in @((Join-Path $ProjectRoot 'workshop\shinawase-workshop.zip'), (Join-Path $ProjectRoot 'dist\shinawase-workshop.zip'))) {
+      if (Test-Path -LiteralPath $candidate) { $zip = $candidate; break }
+    }
+  }
+  if (-not $zip -or -not (Test-Path -LiteralPath $zip)) { throw 'shinawase-workshop.zip not found. Pass -WorkshopZip or build it with scripts\build-workshop-item.mjs.' }
+  $script = Join-Path $LocalSource 'workshop-setup.mjs'
+  $root = Split-Path -Parent $echoExe
+  $args = @($script, 'install', '--echo', $root, '--zip', (Resolve-Path -LiteralPath $zip).Path)
+  if (-not $launch) { $args += '--no-switch' }
+  $previous = @{ run = $env:ELECTRON_RUN_AS_NODE; asar = $env:ELECTRON_NO_ASAR }
+  $env:ELECTRON_RUN_AS_NODE = '1'
+  $env:ELECTRON_NO_ASAR = '1'
+  $result = $null
+  try {
+    & $echoExe @args 2>&1 | ForEach-Object {
+      $line = [string]$_
+      try { $evt = $line | ConvertFrom-Json } catch { return }
+      if ($evt.event -eq 'result') { $result = $evt; return }
+      if ($evt.event -eq 'log') { Write-Host "  $($evt.message)" -ForegroundColor DarkGray; return }
+      switch ([string]$evt.stage) {
+        'echo' { Write-Host (T 'wsEcho') -ForegroundColor Gray }
+        'import' { Write-Host (T 'wsImport') -ForegroundColor Gray }
+        'approve' { Write-Host (T 'wsApprove') -ForegroundColor Yellow }
+        'loader' { if (-not $evt.step) { Write-Host (T 'wsLoader') -ForegroundColor Gray } }
+        'switch' { Write-Host (T 'wsSwitch') -ForegroundColor Gray }
+      }
+    }
+  } finally {
+    $env:ELECTRON_RUN_AS_NODE = $previous.run
+    $env:ELECTRON_NO_ASAR = $previous.asar
+  }
+  if (-not $result -or -not $result.ok) { throw ("Workshop install failed: " + $(if ($result) { $result.error } else { 'no result' })) }
+  Write-Host ((T 'wsDone') -f $result.loaderVersion) -ForegroundColor Green
+}
+
 try {
   Initialize-SetupConsole
   Choose-LoaderLocale
   if (-not (Show-SetupDisclaimer)) { Exit-Setup 0 }
   if ($Action -eq 'menu') { Invoke-Menu; return }
   $selected = Resolve-EchoExecutable
+  if ($Edition -eq 'workshop' -and $Action -in @('install', 'update')) {
+    Install-WorkshopEdition $selected ($Action -eq 'install')
+    Exit-Setup 0
+    return
+  }
   switch ($Action) {
     'install' { Complete-InstallAndLaunch $selected $false ([bool]$PatchApp) }
     'update' { Complete-InstallAndLaunch $selected $true ([bool]$PatchApp) }

@@ -2653,3 +2653,12 @@
   width: auto;
   margin-top: 10px;
 }
+
+/* ECHO paints the spatial source rail with its solid sidebar colour in dark and
+   ambient themes (theme-presets.css), but keeps its own sidebar transparent in
+   wallpaper and acrylic shells. Follow the shell so the rail does not sit as an
+   opaque block over a transparent UI. */
+html .app-shell:is(.app-shell--wallpaper-ready, .app-shell--acrylic) .streaming-page.streaming-hub--spatial .streaming-source-rail {
+  border-right-color: transparent;
+  background: transparent;
+}

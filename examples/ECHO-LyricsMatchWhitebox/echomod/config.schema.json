@@ -54,6 +54,49 @@
       "title": "语言",
       "enum": ["auto", "zh-CN", "en-US"],
       "default": "auto"
+    },
+    "normalizeEnabled": {
+      "type": "boolean",
+      "title": "启用搜索词标准化",
+      "description": "搜索前统一处理全角/半角、繁简、日文假名、括号与噪音词。关闭后按原始歌名（及可选的歌手）发送。",
+      "default": true
+    },
+    "normalizeTraditional": {
+      "type": "boolean",
+      "title": "繁体转简体",
+      "description": "默认关闭：保留原文，避免日文汉字标题（如「紅蓮華」）被转成「红莲华」后 LRCLIB 返回 0 结果；纯中文曲库可开启。开启后使用内置 OpenCC 词表，含假名的标题会跳过。",
+      "default": false
+    },
+    "normalizeKana": {
+      "type": "string",
+      "title": "日文假名处理",
+      "enum": ["off", "auto", "hiragana", "katakana"],
+      "default": "off",
+      "description": "默认 off：保留原假名，避免「アイドル」被折成「あいどる」后命中另一首歌。auto：仅纯假名标题把片假名转平假名（可能同音误配，慎用）；hiragana / katakana：强制单向转换。全角/半角始终由 NFKC 处理。"
+    },
+    "normalizeNoise": {
+      "type": "boolean",
+      "title": "过滤噪音词与括号",
+      "description": "移除 (MV)、[Official Video]、【歌詞】、feat.、prod. 等无意义后缀；Live/Cover 等版本词交给「保留版本标签」处理。",
+      "default": true
+    },
+    "normalizeKeepVersion": {
+      "type": "boolean",
+      "title": "保留版本标签",
+      "description": "把 Live / Cover / Instrumental / Karaoke / Remix / TV Size 等版本词规范成英文并保留，便于 ECHO 的版本匹配打分。关闭则直接删除。",
+      "default": true
+    },
+    "normalizeIncludeArtist": {
+      "type": "boolean",
+      "title": "搜索词附带歌手",
+      "description": "默认关闭。ECHO 的手动搜索会把整串文字当作歌名、歌手留空；实测 LRCLIB 用「歌名 歌手」查询会返回空结果，因此默认只发歌名。仅在确认歌词源支持整串搜索时开启。",
+      "default": false
+    },
+    "normalizeDebug": {
+      "type": "boolean",
+      "title": "输出搜索词调试日志",
+      "description": "在开发者工具控制台打印原始歌名/歌手与最终搜索词。",
+      "default": false
     }
   }
 }

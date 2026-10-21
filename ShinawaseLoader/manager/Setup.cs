@@ -156,6 +156,7 @@ namespace Shinawase.Manager
             // Old payload files go first so a removed file cannot linger.
             Fs.TryDelete(Path.Combine(dir, "ShinawaseLoader"));
             Fs.TryDelete(Path.Combine(dir, "examples"));
+            Fs.TryDelete(Path.Combine(dir, "workshop"));
             ExtractPayload(dir);
             if (!File.Exists(Path.Combine(dir, "ShinawaseLoader", "ShinawaseLoader.mjs"))) throw new InvalidDataException("payload has no loader tree");
             var version = LoaderVersionInfo.Read(Path.Combine(dir, "ShinawaseLoader"));

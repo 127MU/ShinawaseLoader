@@ -15,7 +15,7 @@ const splashMarker = '/* shinawase-loader-startup-splash-v1 */';
 // rebuilds isolated runtimes that were patched by an older Loader.
 // 2: startup splash block.
 // 4: preload bridge carries its own channel table; generic topmost deferral.
-const PATCH_REVISION = 4;
+const PATCH_REVISION = 7;
 const MAIN_ENTRY = 'out/main/index.js';
 const PRELOAD_ENTRY = 'out/preload/index.mjs';
 const STEAM_STREAMING_REJECT = 'Music streaming playback is not available in the Steam distribution.';
@@ -212,13 +212,18 @@ const bridge = `${marker}
   const url = builtin('node:url');
   const childProcess = builtin('node:child_process');
   if (!fs || !path || !url || !childProcess || typeof app === 'undefined') return;
+  // Without the launcher's ECHO_MOD_ROOT (a runtime started directly), walk up
+  // from <root>/ShinawaseLoader/modded-runtime the same way on every platform.
   const installRoot = process.env.ECHO_MOD_ROOT || (process.platform === 'darwin'
     ? (() => {
       const appBundle = path.dirname(path.dirname(process.resourcesPath));
       const parent = path.dirname(appBundle);
       return path.basename(parent) === 'modded-runtime' ? path.dirname(path.dirname(parent)) : path.dirname(appBundle);
     })()
-    : path.dirname(process.resourcesPath));
+    : (() => {
+      const runtimeRoot = path.dirname(process.resourcesPath);
+      return path.basename(runtimeRoot) === 'modded-runtime' ? path.dirname(path.dirname(runtimeRoot)) : runtimeRoot;
+    })());
   const loaderRoot = process.env.ECHO_MOD_HOME || path.join(installRoot, 'ShinawaseLoader');
   const script = path.join(loaderRoot, 'ShinawaseLoader.mjs');
   const configPath = path.join(loaderRoot, 'loader.config.json');
@@ -238,8 +243,13 @@ const bridge = `${marker}
     // runtimePath recorded by the installer (a matching system Node when one was
     // found, otherwise the bundled node.exe copied next to the loader), then a
     // local node.exe, and finally a bare node resolved via PATH.
+    // nodeRuntime "echo" (Workshop installs, which ship no node.exe) runs the
+    // Loader on this executable through Electron's RunAsNode fuse; the
+    // installer only records it after checking that the fuse is enabled.
+    const useEchoNode = String(config.nodeRuntime || '').toLowerCase() === 'echo' && !process.env.ECHO_NODE_PATH;
     const resolveNodePath = () => {
       if (process.env.ECHO_NODE_PATH && fs.existsSync(process.env.ECHO_NODE_PATH)) return process.env.ECHO_NODE_PATH;
+      if (useEchoNode) return process.execPath;
       if (config.runtimePath && typeof config.runtimePath === 'string' && fs.existsSync(config.runtimePath)) return config.runtimePath;
       const local = path.join(loaderRoot, process.platform === 'win32' ? 'node.exe' : 'node');
       if (fs.existsSync(local)) return local;
@@ -288,6 +298,9 @@ const bridge = `${marker}
         cwd: installRoot,
         env: {
           ...process.env,
+          // ELECTRON_NO_ASAR: the Loader reads app.asar as a file, not as
+          // Electron's virtual directory.
+          ...(useEchoNode ? { ELECTRON_RUN_AS_NODE: '1', ELECTRON_NO_ASAR: '1' } : {}),
           ECHO_WORKSPACE_ROOT: installRoot,
           ECHO_GAME_ROOT: installRoot,
           ECHO_MOD_HOME: loaderRoot,
@@ -349,13 +362,18 @@ const nativeHostBridge = `${nativeHostMarker}
   const path = builtin('node:path');
   const url = builtin('node:url');
   if (!fs || !path || !url || typeof app === 'undefined') return;
+  // Without the launcher's ECHO_MOD_ROOT (a runtime started directly), walk up
+  // from <root>/ShinawaseLoader/modded-runtime the same way on every platform.
   const installRoot = process.env.ECHO_MOD_ROOT || (process.platform === 'darwin'
     ? (() => {
       const appBundle = path.dirname(path.dirname(process.resourcesPath));
       const parent = path.dirname(appBundle);
       return path.basename(parent) === 'modded-runtime' ? path.dirname(path.dirname(parent)) : path.dirname(appBundle);
     })()
-    : path.dirname(process.resourcesPath));
+    : (() => {
+      const runtimeRoot = path.dirname(process.resourcesPath);
+      return path.basename(runtimeRoot) === 'modded-runtime' ? path.dirname(path.dirname(runtimeRoot)) : runtimeRoot;
+    })());
   const loaderRoot = process.env.ECHO_MOD_HOME || path.join(installRoot, 'ShinawaseLoader');
   const script = path.join(loaderRoot, 'native-host.cjs');
   const configPath = path.join(loaderRoot, 'loader.config.json');
@@ -389,13 +407,18 @@ const splashBridge = `${splashMarker}
     const path = builtin('node:path');
     const nodeModule = builtin('node:module');
     if (!fs || !path || !nodeModule || typeof app === 'undefined') return;
+    // Without the launcher's ECHO_MOD_ROOT (a runtime started directly), walk up
+    // from <root>/ShinawaseLoader/modded-runtime the same way on every platform.
     const installRoot = process.env.ECHO_MOD_ROOT || (process.platform === 'darwin'
       ? (() => {
         const appBundle = path.dirname(path.dirname(process.resourcesPath));
         const parent = path.dirname(appBundle);
         return path.basename(parent) === 'modded-runtime' ? path.dirname(path.dirname(parent)) : path.dirname(appBundle);
       })()
-      : path.dirname(process.resourcesPath));
+      : (() => {
+        const runtimeRoot = path.dirname(process.resourcesPath);
+        return path.basename(runtimeRoot) === 'modded-runtime' ? path.dirname(path.dirname(runtimeRoot)) : runtimeRoot;
+      })());
     const loaderRoot = process.env.ECHO_MOD_HOME || path.join(installRoot, 'ShinawaseLoader');
     const script = path.join(loaderRoot, 'startup-splash.cjs');
     if (!fs.existsSync(script)) return;
@@ -648,6 +671,10 @@ const applyAuxiliaryWindowCrashFix = (text) => {
   const overlayCtor = '    skipTaskbar: true,\n    show: false,\n    // Ordinary topmost from the first frame (same floating level the runtime\n    // applyMiniPlayerAlwaysOnTop uses); some Linux window managers only honor\n    // the above-state reliably when it is set before the window is mapped.\n    alwaysOnTop: true,\n    ...linuxOverlayBrowserWindowOptions(),\n    webPreferences: {';
   const overlaySafe = overlayCtor.replace('alwaysOnTop: true', 'alwaysOnTop: false');
   if (next.includes(overlayCtor)) next = next.replaceAll(overlayCtor, overlaySafe);
+  // ECHOSteam after 26.10.20 makes the island's topmost switchable:
+  // `alwaysOnTop: isMiniPlayerForcedTopmost(),`. The deferred helper applies it.
+  const switchableCtor = overlayCtor.replace('alwaysOnTop: true,', 'alwaysOnTop: isMiniPlayerForcedTopmost(),');
+  if (next.includes(switchableCtor)) next = next.replaceAll(switchableCtor, overlaySafe);
   const legacyCtor = '    skipTaskbar: true,\n    show: false,\n    alwaysOnTop: true,\n    webPreferences: {';
   const legacySafe = '    skipTaskbar: true,\n    show: false,\n    alwaysOnTop: false,\n    webPreferences: {';
   while (next.includes(legacyCtor)) next = next.replace(legacyCtor, legacySafe);
@@ -842,6 +869,48 @@ const patchSteamPlaylistsPage = (text) => {
   return next;
 };
 
+// LyricsPage memoizes its streaming lyrics target on the current track
+// object. The Core queue persists its resume pointer every ~5s while playing
+// and republishes the page, so the renderer rebuilds that object with the same
+// content. Each rebuild re-ran the streaming lyrics effect: the "loading" /
+// "loaded" notice flashed and the lyrics view reset. Key the memo on the
+// fields it reads instead; the dependency array keeps a fixed length and the
+// rewritten form no longer matches.
+const streamingLyricsTargetRe = /(?<binding>[A-Za-z_$][\w$]*)=(?<react>[A-Za-z_$][\w$]*)\.useMemo\(\(\)=>(?<isStreaming>[A-Za-z_$][\w$]*)\((?<track>[A-Za-z_$][\w$]*)\)&&!\k<track>\.isLiveStream\?\{provider:\k<track>\.provider,providerTrackId:\k<track>\.providerTrackId\}:null,\[\k<track>\]\)/gu;
+const streamingLyricsTargetReplacement = '$<binding>=$<react>.useMemo(()=>$<isStreaming>($<track>)&&!$<track>.isLiveStream?{provider:$<track>.provider,providerTrackId:$<track>.providerTrackId}:null,[$<isStreaming>($<track>)&&!$<track>.isLiveStream,$<track>?.provider,$<track>?.providerTrackId])';
+const patchLyricsPage = (text) => {
+  streamingLyricsTargetRe.lastIndex = 0;
+  return text.replace(streamingLyricsTargetRe, streamingLyricsTargetReplacement);
+};
+
+// Repeat-one on a streaming track: the Core queue hands the native daemon the
+// item's `streaming:<provider>:<id>` path, so at the natural end the daemon
+// restarts the open HTTP source itself and reports a queue advance without a
+// track id. AudioSession.handleQueueAdvance then sets currentTrackId (and the
+// queue item and metadata) to null: audio keeps looping while ECHO no longer
+// knows the song, so the player bar, lyrics and Mods lose it. An advance that
+// can only be the current item keeps the current identity.
+const repeatOneIdentityMarker = '/* shinawase-repeat-one-identity-v1 */';
+const queueAdvanceAnchor = '  handleQueueAdvance(params) {\n    this.emit("track-advance", {';
+const queueAdvanceReplacement = `  handleQueueAdvance(params) {\n    ${repeatOneIdentityMarker}\n    if (params && (typeof params.nextTrackId !== "string" || !params.nextTrackId) && this.currentTrackId && (this.queueSnapshot?.repeatMode === "one" || typeof params.nextItemId === "string" && params.nextItemId === this.currentQueueItemId)) {\n      params = {\n        ...params,\n        nextTrackId: this.currentTrackId,\n        nextItemId: typeof params.nextItemId === "string" && params.nextItemId ? params.nextItemId : this.currentQueueItemId,\n        nextMetadata: params.nextMetadata && typeof params.nextMetadata === "object" && !Array.isArray(params.nextMetadata) && Object.keys(params.nextMetadata).length ? params.nextMetadata : this.currentTrackMetadata\n      };\n    }\n    this.emit("track-advance", {`;
+// The root of that: Core's native supply gives a streaming item its
+// `streaming:` pseudo path, which the daemon cannot open ("Protocol not
+// found"). On repeat-one the daemon's auto-advance then fails, playback "ends
+// naturally", and the renderer restarts the Core item from its saved resume
+// position (seconds before the end) through a slow remote open. Give the
+// current streaming item the HTTP source that is already playing, as the
+// daemon queue does for remote tracks, and end the daemon queue before any
+// other unresolved streaming item so the renderer queue advances as usual.
+const streamingDaemonQueueMarker = '/* shinawase-streaming-daemon-queue-v1 */';
+const prepareDaemonQueueAnchor = 'const prepareDaemonQueue = async (snapshot, resolveRemote, isCurrent, currentSource) => {\n  const needsPreparation = ';
+const prepareDaemonQueueReplacement = `const prepareDaemonQueue = async (snapshot, resolveRemote, isCurrent, currentSource) => {\n  ${streamingDaemonQueueMarker}\n  const unresolvedStreaming = (item) => !item.source && /^streaming:/u.test(String(item.filePath || ""));\n  if (snapshot.items.some(unresolvedStreaming)) {\n    const at = snapshot.items.findIndex((item) => item.itemId === snapshot.currentItemId);\n    if (at < 0) return { ...snapshot, items: [], repeatMode: "off" };\n    const ordered = snapshot.repeatMode === "one" ? [snapshot.items[at]] : snapshot.repeatMode === "all" ? [...snapshot.items.slice(at), ...snapshot.items.slice(0, at)] : snapshot.items.slice(at);\n    const kept = [];\n    for (const item of ordered) {\n      if (!unresolvedStreaming(item)) kept.push(item);\n      else if (!kept.length && currentSource) kept.push({ ...item, source: currentSource });\n      else break;\n    }\n    if (!kept.length) return { ...snapshot, items: [], repeatMode: "off" };\n    snapshot = { ...snapshot, items: kept, repeatMode: snapshot.repeatMode === "one" || kept.length === ordered.length ? snapshot.repeatMode : "off" };\n  }\n  const needsPreparation = `;
+const applyRepeatOneIdentityFix = (text) => {
+  let next = text;
+  if (!next.includes(repeatOneIdentityMarker) && next.includes(queueAdvanceAnchor)) next = next.replace(queueAdvanceAnchor, queueAdvanceReplacement);
+  if (!next.includes(streamingDaemonQueueMarker) && next.includes(prepareDaemonQueueAnchor)) next = next.replace(prepareDaemonQueueAnchor, prepareDaemonQueueReplacement);
+  return next;
+};
+
 const injectSplashBridge = (text) => (text.includes(splashMarker) ? text : `${splashBridge}\n${text}`);
 
 const patch = (root) => {
@@ -859,14 +928,17 @@ const patch = (root) => {
   const playlistPatches = [];
   for (const entry of playlistPages) {
     const currentPlaylistsText = current.bytes.subarray(current.dataStart + Number(entry.info.offset), current.dataStart + Number(entry.info.offset) + Number(entry.info.size)).toString('utf8');
-    if (!currentPlaylistsText.includes('sourceProvider==="local"') && !currentPlaylistsText.includes('"itemToTrack")')) continue;
-    const playlistsText = patchSteamPlaylistsPage(currentPlaylistsText);
+    const playlistCandidate = currentPlaylistsText.includes('sourceProvider==="local"') || currentPlaylistsText.includes('"itemToTrack")');
+    const lyricsCandidate = currentPlaylistsText.includes('providerTrackId:') && currentPlaylistsText.includes('.isLiveStream?');
+    if (!playlistCandidate && !lyricsCandidate) continue;
+    let playlistsText = playlistCandidate ? patchSteamPlaylistsPage(currentPlaylistsText) : currentPlaylistsText;
+    if (lyricsCandidate) playlistsText = patchLyricsPage(playlistsText);
     if (playlistsText !== currentPlaylistsText) playlistPatches.push({ entry, playlistsText });
   }
   const mainWithBridge = currentText.includes(marker) || currentText.includes('external-mod-loader:start:requested') ? currentText : `${bridge}\n${currentText}`;
   const mainWithNative = mainWithBridge.includes(nativeHostMarker) ? mainWithBridge : `${nativeHostBridge}\n${mainWithBridge}`;
   const mainWithSplash = injectSplashBridge(mainWithNative);
-  const mainText = applyAuxiliaryWindowCrashFix(patchPlayback(mainWithSplash));
+  const mainText = applyRepeatOneIdentityFix(applyAuxiliaryWindowCrashFix(patchPlayback(mainWithSplash)));
   const preloadText = patchPreload(currentPreloadText);
   const missingIntegrity = [main, preload, ...playlistPatches.map((item) => item.entry)].filter(Boolean).some((entry) => !entry.info.integrity);
   if (mainText === currentText && preloadText === currentPreloadText && !playlistPatches.length && !missingIntegrity) {
@@ -929,8 +1001,13 @@ const verifyAnchors = (root) => {
   const mainText = entryBytes(parsed, main).toString('utf8');
   const preloadText = entryBytes(parsed, preload).toString('utf8');
   const playlistHits = [];
+  let lyricsStreamingTargets = 0;
   for (const entry of files.filter((item) => /^out\/renderer\/assets\/.+\.js$/u.test(item.relativePath))) {
     const text = entryBytes(parsed, entry).toString('utf8');
+    if (text.includes('.isLiveStream?')) {
+      streamingLyricsTargetRe.lastIndex = 0;
+      lyricsStreamingTargets += [...text.matchAll(streamingLyricsTargetRe)].length;
+    }
     if (!text.includes('sourceProvider==="local"')) continue;
     playlistProviderFilterRe.lastIndex = 0;
     playlistHits.push({
@@ -962,7 +1039,11 @@ const verifyAnchors = (root) => {
     qualityPassthrough: mainText.includes('quality: "standard",\n      stableKey:'),
     preloadApiAnchor: preloadStubTriple(preloadText) || Boolean(findEchoApiOpen(preloadText)),
     playlistFilter: playlistHits.some((item) => item.filterMatches.length),
-    aotMiniPlayerCtor: mainText.includes(aotCurrentCtor) || mainText.includes(aotOverlayCtor),
+    lyricsStreamingTarget: lyricsStreamingTargets > 0,
+    repeatOneIdentity: mainText.includes(queueAdvanceAnchor) || mainText.includes(repeatOneIdentityMarker),
+    streamingDaemonQueue: mainText.includes(prepareDaemonQueueAnchor) || mainText.includes(streamingDaemonQueueMarker),
+    aotMiniPlayerCtor: mainText.includes(aotCurrentCtor) || mainText.includes(aotOverlayCtor)
+      || mainText.includes(aotOverlayCtor.replace('alwaysOnTop: true,', 'alwaysOnTop: isMiniPlayerForcedTopmost(),')),
     // Exact helper bodies with a birth stamp at window creation (<= 26.9.x), or
     // all three helpers in the shape the generic wrapper takes (26.10.x).
     aotPetHelper: mainText.includes(aotCurrentPet) || mainText.includes(aotWin32Pet) || countTopmostHelpers(mainText) === 3,
@@ -990,7 +1071,7 @@ const verifyAnchors = (root) => {
   };
 };
 
-export { patch, restore, syncIntegrity, verifyAnchors, patchSteamPlaylistsPage, patchPreload, injectSplashBridge, applyAuxiliaryWindowCrashFix, PATCH_REVISION };
+export { patch, restore, syncIntegrity, verifyAnchors, patchSteamPlaylistsPage, patchLyricsPage, applyRepeatOneIdentityFix, patchPreload, injectSplashBridge, applyAuxiliaryWindowCrashFix, PATCH_REVISION, bridge as mainBridgeSource };
 
 const isMain = process.argv[1] && resolve(fileURLToPath(import.meta.url)) === resolve(process.argv[1]);
 if (isMain) {

@@ -5,7 +5,9 @@ param(
   # Loader tree to bundle (default: <repo>\ShinawaseLoader).
   [string]$LoaderSource,
   # Folder with the bundled .echomod packages (default: <repo>\examples\packages).
-  [string]$PackagesSource
+  [string]$PackagesSource,
+  # The Workshop edition (default: <repo>\dist\shinawase-workshop.zip when present).
+  [string]$WorkshopZip
 )
 
 # Builds ShinawaseSetup.exe: the Shinawase Manager with the loader tree and the
@@ -36,6 +38,12 @@ try {
   if (Test-Path -LiteralPath $PackagesSource) {
     Get-ChildItem -LiteralPath $PackagesSource -Filter '*.echomod' -File | ForEach-Object { Copy-Item -LiteralPath $_.FullName -Destination $packagesTarget }
   }
+  # The Manager installs the Workshop edition from <app>\workshop\shinawase-workshop.zip.
+  if (-not $WorkshopZip) { $WorkshopZip = Join-Path $ProjectRoot 'dist\shinawase-workshop.zip' }
+  if (Test-Path -LiteralPath $WorkshopZip) {
+    New-Item -ItemType Directory -Force -Path (Join-Path $stage 'workshop') | Out-Null
+    Copy-Item -LiteralPath $WorkshopZip -Destination (Join-Path $stage 'workshop\shinawase-workshop.zip')
+  } else { Write-Warning 'No shinawase-workshop.zip: this setup installs the Workshop edition by downloading it.' }
 
   # Zip with forward-slash entry names regardless of the .NET Framework default.
   Add-Type -AssemblyName System.IO.Compression

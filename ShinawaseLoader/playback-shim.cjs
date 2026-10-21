@@ -317,6 +317,20 @@ const playStreamingViaShim = async (original, event, raw, item) => {
   }
 };
 
+// Replaying the same queue item resumes from the last status position unless it
+// is within the final second. A streaming track's last status update lands
+// about 1.4s before the end, so ECHO's repeat-one restart asked for e.g. 169s of
+// 170s: a slow remote seek, then the track "ended" again and repeated its final
+// second forever. Nothing useful starts inside the last few seconds; play those
+// from the top.
+const RESTART_TAIL_SECONDS = 3;
+const withoutTailStart = (raw, item) => {
+  const start = Number(raw?.startSeconds);
+  const duration = Number(item?.duration ?? item?.durationSeconds);
+  if (!Number.isFinite(start) || start <= 0 || !Number.isFinite(duration) || duration <= RESTART_TAIL_SECONDS * 2) return raw;
+  return duration - start <= RESTART_TAIL_SECONDS ? { ...raw, startSeconds: 0 } : raw;
+};
+
 const wrappedChannels = new Set();
 
 const wrapChannel = (ipcMain, channel, wrapper) => {
@@ -367,7 +381,7 @@ const installStreamingPlaybackShim = (host = {}) => {
     [CHANNELS.play, async (original, event, raw) => {
       const item = streamingItem(raw);
       if (!item) return original(event, raw);
-      return playStreamingViaShim(original, event, raw, item);
+      return playStreamingViaShim(original, event, withoutTailStart(raw, item), item);
     }],
     [CHANNELS.resolve, async (original, event, raw) => {
       const item = streamingItem(raw);

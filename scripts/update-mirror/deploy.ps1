@@ -56,8 +56,12 @@ echo deployed
 }
 
 Write-Host "`nVerifying http://$hostName/shinawase/ ..."
-foreach ($path in 'mirror-manifest.json', 'mirror-manifest.sig', 'ShinawaseLoader-main.zip') {
+$verify = @('mirror-manifest.json', 'mirror-manifest.sig', 'ShinawaseLoader-main.zip')
+if (Test-Path (Join-Path $MirrorDir 'shinawase-workshop.zip')) { $verify += 'shinawase-workshop.zip' }
+foreach ($path in $verify) {
   try { $r = Invoke-WebRequest -UseBasicParsing -Method Head -Uri "http://$hostName/shinawase/$path" -TimeoutSec 15; '{0,-28} {1}' -f $path, $r.StatusCode }
   catch { '{0,-28} FAILED ({1})' -f $path, $_.Exception.Message }
 }
-(Invoke-RestMethod -Uri "http://$hostName/shinawase/mirror-manifest.json" -TimeoutSec 15).loader | Format-List version, sha256
+$published = Invoke-RestMethod -Uri "http://$hostName/shinawase/mirror-manifest.json" -TimeoutSec 15
+$published.loader | Format-List version, sha256
+if ($published.workshop) { $published.workshop | Format-List version, loaderVersion, sha256 }

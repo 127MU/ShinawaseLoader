@@ -4,7 +4,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
-import { applyAuxiliaryWindowCrashFix, patchPreload, patchSteamPlaylistsPage } from '../ShinawaseLoader/echo-asar.mjs';
+import { applyAuxiliaryWindowCrashFix, applyRepeatOneIdentityFix, patchLyricsPage, patchPreload, patchSteamPlaylistsPage } from '../ShinawaseLoader/echo-asar.mjs';
 
 test('preload bridge invokes the bridge channels even when ECHO\'s IpcChannels lost them', () => {
   // 26.10.8+ Steam preloads ship an IpcChannels table without the streaming,
@@ -107,4 +107,140 @@ test('liked page add-to-playlist targets include imported streaming playlists', 
   const patched = patchSteamPlaylistsPage(liked);
   assert.equal(patched, 'qt=224,el=r(t=>t.kind!=="system"&&t.kind!=="smart","canAddTrackToPlaylist"),we=1');
   assert.equal(patchSteamPlaylistsPage(patched), patched);
+});
+
+test('streaming lyrics target survives a queue republish of the same track', () => {
+  // 26.10.18 LyricsPage shape. The Core queue republishes its page every few
+  // seconds while playing, so the current track arrives as a new object.
+  const page = [
+    'const isStreaming=e=>e?.mediaType==="streaming"&&typeof e.providerTrackId=="string";',
+    'const memo=[];let slot=0;',
+    'const a={useMemo(fn,deps){const prev=memo[slot];let value;if(prev&&prev.deps.length===deps.length&&prev.deps.every((d,i)=>Object.is(d,deps[i])))value=prev.value;else{value=fn();memo[slot]={deps,value};}slot+=1;return value;}};',
+    'globalThis.render=(N)=>{slot=0;const he=a.useMemo(()=>isStreaming(N)&&!N.isLiveStream?{provider:N.provider,providerTrackId:N.providerTrackId}:null,[N]);return he;};',
+  ].join('\n');
+  const patched = patchLyricsPage(page);
+  assert.notEqual(patched, page);
+  assert.equal(patchLyricsPage(patched), patched, 'idempotent');
+  const track = () => ({ id: 'streaming:netease:1', mediaType: 'streaming', provider: 'netease', providerTrackId: '1', fieldSources: { title: 'netease' } });
+  const stock = {};
+  vm.runInNewContext(page, stock);
+  assert.notEqual(stock.render(track()), stock.render(track()), 'stock memo churns on object identity');
+  const context = {};
+  vm.runInNewContext(patched, context);
+  const first = context.render(track());
+  assert.equal(context.render(track()), first, 'same provider track keeps the same target');
+  assert.deepEqual({ ...context.render({ ...track(), providerTrackId: '2' }) }, { provider: 'netease', providerTrackId: '2' });
+  assert.equal(context.render({ ...track(), isLiveStream: true }), null);
+  assert.equal(context.render(null), null);
+});
+
+test('a repeat-one loop of a streaming track keeps the current track identity', () => {
+  // 26.10.20 AudioSession.handleQueueAdvance, trimmed to the identity fields.
+  // The daemon restarts the open HTTP source and reports no track id.
+  const session = [
+    'globalThis.AudioSession = class AudioSession {',
+    '  emit(name, value) { this.events.push(value.nextTrackId); }',
+    '  getStatus() { return {}; }',
+    '  handleQueueAdvance(params) {',
+    '    this.emit("track-advance", { status: this.getStatus(), nextTrackId: typeof params.nextTrackId === "string" ? params.nextTrackId : null, gapless: params.gaplessAdvance === true });',
+    '    if (typeof params.nextFilePath === "string") {',
+    '      this.currentFilePath = params.nextFilePath;',
+    '      this.currentTrackId = typeof params.nextTrackId === "string" ? params.nextTrackId : null;',
+    '      const metadata = params.nextMetadata && typeof params.nextMetadata === "object" && !Array.isArray(params.nextMetadata) ? params.nextMetadata : null;',
+    '      this.currentTrackMetadata = metadata ? { title: metadata.title ?? null, artist: metadata.artist ?? null } : null;',
+    '    }',
+    '    this.currentQueueItemId = typeof params.nextItemId === "string" ? params.nextItemId : null;',
+    '  }',
+    '};',
+  ].join('\n');
+  const patched = applyRepeatOneIdentityFix(session);
+  assert.notEqual(patched, session);
+  assert.equal(applyRepeatOneIdentityFix(patched), patched, 'idempotent');
+  assert.equal(applyRepeatOneIdentityFix('const unrelated = 1;'), 'const unrelated = 1;', 'other builds are left alone');
+  const make = (source, repeatMode) => {
+    const context = {};
+    vm.runInNewContext(source, context);
+    const audio = new context.AudioSession();
+    Object.assign(audio, {
+      events: [],
+      queueSnapshot: { repeatMode, items: [] },
+      currentTrackId: 'streaming:netease:1',
+      currentQueueItemId: 'q1',
+      currentFilePath: 'http://cdn.example/1.flac',
+      currentTrackMetadata: { title: 'Song', artist: 'Artist' },
+    });
+    return audio;
+  };
+  const loop = { queueAdvance: true, nextFilePath: 'http://cdn.example/1.flac' };
+  const stock = make(session, 'one');
+  stock.handleQueueAdvance(loop);
+  assert.equal(stock.currentTrackId, null, 'stock ECHO forgets the song');
+
+  const fixed = make(patched, 'one');
+  fixed.handleQueueAdvance(loop);
+  assert.equal(fixed.currentTrackId, 'streaming:netease:1');
+  assert.equal(fixed.currentQueueItemId, 'q1');
+  assert.deepEqual({ ...fixed.currentTrackMetadata }, { title: 'Song', artist: 'Artist' });
+  assert.deepEqual([...fixed.events], ['streaming:netease:1'], 'Core hears the same track again');
+
+  const next = make(patched, 'off');
+  next.handleQueueAdvance({ queueAdvance: true, nextFilePath: 'D:/b.flac', nextTrackId: 'local:2', nextItemId: 'q2', nextMetadata: { title: 'B' } });
+  assert.equal(next.currentTrackId, 'local:2', 'a real advance is untouched');
+  assert.equal(next.currentQueueItemId, 'q2');
+  const unknown = make(patched, 'off');
+  unknown.handleQueueAdvance({ queueAdvance: true, nextFilePath: 'D:/c.flac', nextItemId: 'q3' });
+  assert.equal(unknown.currentTrackId, null, 'without repeat-one an unknown item stays unknown');
+});
+
+test('the native daemon queue never receives an unresolved streaming: path', async () => {
+  // Same entry line as 26.10.20 prepareDaemonQueue; the rest is a stub that
+  // reports what the daemon would be handed.
+  const module = [
+    'const isRemoteQueueTrack = (id) => /^remote:/u.test(id);',
+    'const isHttp = (path) => /^https?:\\/\\//u.test(path);',
+    'const prepareDaemonQueue = async (snapshot, resolveRemote, isCurrent, currentSource) => {',
+    '  const needsPreparation = snapshot.items.some((item) => isRemoteQueueTrack(item.trackId) || isHttp(item.filePath));',
+    '  return snapshot;',
+    '};',
+    'globalThis.prepare = prepareDaemonQueue;',
+  ].join('\n');
+  const patched = applyRepeatOneIdentityFix(module);
+  assert.notEqual(patched, module);
+  assert.equal(applyRepeatOneIdentityFix(patched), patched, 'idempotent');
+  const context = {};
+  vm.runInNewContext(patched, context);
+  const run = (snapshot, source) => context.prepare(snapshot, null, () => true, source);
+  const streaming = (n) => ({ itemId: `q${n}`, trackId: `streaming:netease:${n}`, filePath: `streaming:netease:${n}` });
+  const local = (n) => ({ itemId: `q${n}`, trackId: `local:${n}`, filePath: `D:/music/${n}.flac` });
+  const current = { kind: 'http', uri: 'https://cdn.example/1.flac' };
+  const plain = (value) => JSON.parse(JSON.stringify(value));
+
+  const one = await run({ currentItemId: 'q1', repeatMode: 'one', items: [local(0), streaming(1), streaming(2)] }, current);
+  assert.deepEqual(plain(one.items), [{ ...streaming(1), source: current }], 'repeat-one loops the open stream with its own identity');
+  assert.equal(one.repeatMode, 'one');
+
+  const off = await run({ currentItemId: 'q0', repeatMode: 'off', items: [local(0), streaming(1), local(2)] }, undefined);
+  assert.deepEqual(plain(off.items), [local(0)], 'stops before the next streaming item');
+  assert.equal(off.repeatMode, 'off');
+
+  const all = await run({ currentItemId: 'q1', repeatMode: 'all', items: [local(0), streaming(1)] }, current);
+  assert.deepEqual(plain(all.items), [{ ...streaming(1), source: current }, local(0)], 'repeat-all keeps a whole cycle');
+  assert.equal(all.repeatMode, 'all');
+
+  const cut = await run({ currentItemId: 'q1', repeatMode: 'all', items: [streaming(1), streaming(2)] }, current);
+  assert.equal(cut.repeatMode, 'off', 'a cut cycle cannot repeat');
+
+  const unopened = await run({ currentItemId: 'q1', repeatMode: 'one', items: [streaming(1)] }, undefined);
+  assert.deepEqual(plain(unopened.items), [], 'nothing playable is handed over without the open source');
+
+  const localOnly = { currentItemId: 'q0', repeatMode: 'one', items: [local(0)] };
+  assert.equal(await run(localOnly, undefined), localOnly, 'local queues are untouched');
+});
+
+test('the island constructor stays non-topmost when its topmost becomes switchable', () => {
+  // ECHOSteam after 26.10.20: `alwaysOnTop: isMiniPlayerForcedTopmost(),`.
+  const ctor = '    skipTaskbar: true,\n    show: false,\n    // Ordinary topmost from the first frame (same floating level the runtime\n    // applyMiniPlayerAlwaysOnTop uses); some Linux window managers only honor\n    // the above-state reliably when it is set before the window is mapped.\n    alwaysOnTop: isMiniPlayerForcedTopmost(),\n    ...linuxOverlayBrowserWindowOptions(),\n    webPreferences: {';
+  const patched = applyAuxiliaryWindowCrashFix(`const window = new BrowserWindow({\n${ctor}\n    }\n  });`);
+  assert.ok(patched.includes('    alwaysOnTop: false,\n    ...linuxOverlayBrowserWindowOptions(),'));
+  assert.ok(!patched.includes('isMiniPlayerForcedTopmost()'), 'the deferred helper applies the setting instead');
 });

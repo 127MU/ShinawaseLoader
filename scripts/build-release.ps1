@@ -38,8 +38,19 @@ New-Item -ItemType Directory -Force -Path $packagesTarget | Out-Null
 Get-ChildItem -LiteralPath (Join-Path $ProjectRoot 'examples\packages') -Filter '*.echomod' -File |
   ForEach-Object { Copy-Item -LiteralPath $_.FullName -Destination $packagesTarget }
 
-# One-file installer (manager + loader + packages) next to the zip.
-& (Join-Path $PSScriptRoot 'build-setup.ps1') -LoaderSource $loaderTarget -PackagesSource $packagesTarget -OutFile (Join-Path $output "ShinawaseSetup-$version.exe") | Out-Null
+# Edition 2, maintained with every release: the ECHO Workshop package. It sits
+# in the release folder (the Manager installs it from there), in the setup
+# payload, and next to the zip as shinawase-workshop.zip for ECHO's Workshop
+# import or Authoring Studio. Needs ShinawaseLoader\node_modules (npm ci).
+$workshopTarget = Join-Path $releaseRoot 'workshop'
+New-Item -ItemType Directory -Force -Path $workshopTarget | Out-Null
+$workshopZip = Join-Path $workshopTarget 'shinawase-workshop.zip'
+& node (Join-Path $PSScriptRoot 'build-workshop-item.mjs') --zip $workshopZip | Out-Null
+if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $workshopZip)) { throw 'build-workshop-item.mjs failed; run npm --prefix .\ShinawaseLoader ci first.' }
+Copy-Item -LiteralPath $workshopZip -Destination (Join-Path $output 'shinawase-workshop.zip') -Force
+
+# One-file installer (manager + loader + packages + Workshop package) next to the zip.
+& (Join-Path $PSScriptRoot 'build-setup.ps1') -LoaderSource $loaderTarget -PackagesSource $packagesTarget -WorkshopZip $workshopZip -OutFile (Join-Path $output "ShinawaseSetup-$version.exe") | Out-Null
 
 Copy-Item -LiteralPath (Join-Path $ProjectRoot 'setup-modloader.bat') -Destination $releaseRoot
 Copy-Item -LiteralPath (Join-Path $ProjectRoot 'pack-mod.bat') -Destination $releaseRoot
@@ -58,6 +69,9 @@ Copy-Item -LiteralPath (Join-Path $ProjectRoot 'scripts\pack-echomod.mjs') -Dest
   '   "<game folder>\ECHO.modded.exe" %command%',
   '3. Or double-click ECHO.modded.exe / ShinawaseLoader\start-echo-with-mods.cmd.',
   '4. setup-modloader.bat -Action install -EchoRoot "<ECHO_ROOT>" still runs the console installer.',
+  '5. Workshop edition: choose "Workshop" in the Manager (or add -Edition workshop to the console installer).',
+  '   ECHO imports workshop\shinawase-workshop.zip through its own Workshop page and asks you to approve',
+  '   full system access; the item then installs the Loader and opens ECHO with Mods. No ECHO.modded.exe.',
   '',
   'ECHO.modded.exe is an independent host. It does not replace Steam ECHO.exe.',
   'Setup asks you to accept the ShinawaseLoader disclaimer. Normal launches do not ask again.',

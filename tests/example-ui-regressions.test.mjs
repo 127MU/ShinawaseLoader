@@ -116,11 +116,18 @@ test('streaming paused/missing status covers both native player surfaces, recove
   h.expectClean();
 });
 
-test('whitebox controls survive continuous lyrics mutations and request persistent manual candidates', async () => {
+test('whitebox controls survive continuous lyrics mutations and search every lyrics source explicitly', async () => {
   const cleared = [];
-  const h = browserDom(createHarness({ packageDir: packageDir('ECHO-LyricsMatchWhitebox'), config: { disableAutoOpenOnBoot: false }, echo: { lyrics: { clearCache: async (id) => cleared.push(id) } } }));
-  h.context.player.queue = () => ({ currentTrack: { id: 'streaming:netease:1', title: 'Song', artist: 'Artist' } });
-  h.document.body.innerHTML = '<section class="lyrics-settings-drawer-root" data-open="true"><div class="lyrics-current-track-section"><div class="lyrics-section-collapse-content"><div class="lyrics-current-track-actions"></div></div></div></section>';
+  const searched = [];
+  // ECHO Steam keeps only "local" enabled (online sources are Workshop-provided), so a search without a provider
+  // id never reaches NetEase / LRCLIB / QQ Music: the panel must name each one.
+  const searchCandidatesForSnapshot = async (request, query, provider) => {
+    searched.push({ provider, query, trackId: request.trackId });
+    return provider === 'lrclib' ? [{ id: 'c1', provider: 'lrclib', title: 'Song', artist: 'Artist', hasSynced: true }] : [];
+  };
+  const h = browserDom(createHarness({ packageDir: packageDir('ECHO-LyricsMatchWhitebox'), config: { disableAutoOpenOnBoot: false }, echo: { lyrics: { clearCache: async (id) => cleared.push(id), searchCandidatesForSnapshot } } }));
+  h.context.player.queue = () => ({ currentTrack: { id: 'streaming:netease:1', mediaType: 'streaming', title: 'Song', artist: 'Artist' } });
+  h.document.body.innerHTML = '<div class="app-titlebar-actions"></div><section class="lyrics-settings-drawer-root" data-open="true"><div class="lyrics-current-track-section"><div class="lyrics-section-collapse-content"><div class="lyrics-current-track-actions"></div></div></div></section>';
   let opened = 0;
   const navigate = h.context.extend.navigate;
   h.context.extend.navigate = (route) => { assert.equal(route, 'lyrics'); opened += 1; navigate(route); };
@@ -137,10 +144,22 @@ test('whitebox controls survive continuous lyrics mutations and request persiste
   h.window.addEventListener('lyrics:rematch-requested', auto);
   button.click();
   await h.flushTimers({ maxMs: 100 });
+  await h.flushMicrotasks();
   assert.equal(opened, 1, 'opening matching from another route opens the native lyrics page first');
   assert.deepEqual(cleared, [], 'clearing the cache would trigger a host reload and dismiss candidates');
-  assert.deepEqual(searches, ['Song Artist']);
+  assert.deepEqual(searches, [], 'the host search only covers local lyrics on current ECHO builds');
   assert.equal(automatic, 0);
+  assert.equal(h.queryAll('[data-echo-lmwb-match-panel]').length, 1, 'no exact match: the whitebox panel opens');
+  const panelSearch = searched.filter((entry) => entry.query === 'song');
+  for (const provider of ['netease', 'lrclib', 'qqmusic']) {
+    assert.ok(panelSearch.some((entry) => entry.provider === provider), `${provider} is searched by name`);
+  }
+  assert.ok(h.query('.echo-lmwb-cand'), 'network candidates are listed');
+  // A second open request while one is pending or open never stacks overlays.
+  h.query('[data-echo-lmwb-match-icon]').click();
+  h.query('[data-echo-lmwb-match-icon]').click();
+  await h.flushMicrotasks();
+  assert.equal(h.queryAll('[data-echo-lmwb-match-panel]').length, 1);
   assert.equal(h.query('.lyrics-settings-drawer-root').getAttribute('data-open'), 'true');
   button.remove();
   for (let i = 0; i < 10; i += 1) {
@@ -199,10 +218,11 @@ test('whitebox asks the host to search candidates once after streaming lyrics gi
   h.window.addEventListener('lyrics:search-requested', onSearch);
   await h.inject();
   await h.flushTimers({ maxMs: 100 });
-  assert.deepEqual(searches, ['Song Artist']);
+  // Title only by default (normalizeIncludeArtist): LRCLIB returns nothing for "title artist".
+  assert.deepEqual(searches, ['song']);
   h.query('.lyrics-match-status').textContent = 'No lyrics found';
   await h.flushTimers({ maxMs: 100 });
-  assert.deepEqual(searches, ['Song Artist']);
+  assert.deepEqual(searches, ['song']);
   h.window.removeEventListener('lyrics:search-requested', onSearch);
   h.dispose();
   expectDisposed(h);

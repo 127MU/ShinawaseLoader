@@ -240,3 +240,13 @@ test('the update lock is exclusive, releases, and recovers from a stale holder',
   discardPartial(join(dir, 'nothing'));
   rmSync(dir, { recursive: true, force: true });
 });
+
+test('the Workshop edition entry is optional and path-checked like the loader', () => {
+  const plain = signedManifest();
+  assert.equal(parseMirrorManifest(plain.bytes, plain.signature, plain.publicPem).workshop, null);
+  const entry = { version: '9.9.9-1', loaderVersion: '9.9.9.1', archive: 'shinawase-workshop.zip', sha256: 'd'.repeat(64), size: 7 };
+  const withWorkshop = signedManifest({ workshop: entry });
+  assert.deepEqual(parseMirrorManifest(withWorkshop.bytes, withWorkshop.signature, withWorkshop.publicPem).workshop, entry);
+  const unsafe = signedManifest({ workshop: { ...entry, archive: '../shinawase-workshop.zip' } });
+  assert.equal(parseMirrorManifest(unsafe.bytes, unsafe.signature, unsafe.publicPem).workshop, null);
+});
