@@ -26,7 +26,7 @@ ECHO Streaming 1.7.5 supports the echo-steam 26.10.8+ playlist wall: link import
 
 Lyrics matching uses the official titlebar **歌词设置** button → right-side drawer. It does **not** auto-pop a floating overlay on every play or inject a circular corner icon. Source filters show an explicit empty state until candidates arrive.
 
-Lyrics Match Whitebox 1.3.2 (鹤良's revision) adds a titlebar **歌词匹配候选** panel: candidates from NetEase, LRCLIB, QQ Music and AMLL with translation preview, a remembered per-track choice, and search-text normalization (traditional/simplified, kana, noise words). Since 26.10.8 ECHO Steam gets online lyrics only from the Workshop item "ECHO 网络歌词匹配" (published file 3817009079); without it, both ECHO's search and the panel find local lyrics only. With it, ECHO's own search still covers only `lyricsEnabledProviders` (local), so the panel and **重新匹配** query each source by name.
+Lyrics Match Whitebox 1.3.3 (鹤良's revision) adds a titlebar **歌词匹配候选** panel: candidates from NetEase, LRCLIB, QQ Music and AMLL with translation preview (full QQ Music text and translation for library tracks, credit lines kept out of translations), a remembered per-track choice, and search-text normalization (traditional/simplified, kana, noise words). Since 26.10.8 ECHO Steam gets online lyrics only from the Workshop item "ECHO 网络歌词匹配" (published file 3817009079); without it, both ECHO's search and the panel find local lyrics only. With it, ECHO's own search still covers only `lyricsEnabledProviders` (local), so the panel and **重新匹配** query each source by name.
 
 ## Reference mods
 

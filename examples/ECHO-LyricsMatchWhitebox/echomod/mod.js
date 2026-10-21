@@ -989,6 +989,17 @@ const nearestLrcText = (map, timeMs) => {
   return best || null;
 };
 
+const previewCreditPattern = /^\s*(?:作词|作詞|作曲|编曲|編曲|词|詞|曲|制作人|製作人|监制|監製|出品|发行|發行|录音|錄音|混音|母带|母帶|和声|和聲|吉他|贝斯|貝斯|鼓|弦乐|弦樂|演唱|原唱|OP|SP)\s*[:：]/iu;
+const previewTitlePattern = /^\s*.+?\s+[-–—]\s+.+$/u;
+
+const isPreviewCreditLine = (text) => previewCreditPattern.test(String(text || ''));
+const isPreviewTitleLine = (text) => previewTitlePattern.test(String(text || '')) && /[\/&]/u.test(String(text || ''));
+const cleanSecondaryLine = (text) => {
+  const value = String(text || '').trim();
+  if (!value || isPreviewCreditLine(value) || isPreviewTitleLine(value)) return undefined;
+  return value;
+};
+
 // Streaming candidates only carry four preview lines from the host. Fetch the
 // selected provider's full LRC so the match panel previews the whole lyric,
 // not just the credits and first line.
@@ -1041,18 +1052,68 @@ const fetchFullCandidatePreview = async (candidate) => {
   return null;
 };
 
-const previewLyricsForTrack = async (track, candidate) => {
-  if (isSnapshotLyricsTrack(track, track?.id)) {
-    const full = await fetchFullCandidatePreview(candidate);
-    if (full?.lines?.length) return full;
-    if (Array.isArray(candidate?.previewLines) && candidate.previewLines.length) {
-      return {
-        truncated: true,
-        lines: candidate.previewLines.map((text) => ({ text: String(text) })),
-      };
-    }
+const previewFallbackLines = (previewLines) => {
+  if (!Array.isArray(previewLines)) return [];
+  return previewLines
+    .map((text) => String(text || '').trim())
+    .filter(Boolean)
+    .map((text) => ({ text }));
+};
+
+const buildQqPreview = (preview) => {
+  const rows = parseLrcPreviewRows(preview?.syncedText);
+  if (!rows.length) return null;
+  const translations = new Map();
+  const romanizations = new Map();
+  for (const line of preview?.lines || []) {
+    const translation = cleanSecondaryLine(line?.translation);
+    if (translation) translations.set(line.timeMs, translation);
+    const romanization = cleanSecondaryLine(line?.romanization);
+    if (romanization) romanizations.set(line.timeMs, romanization);
   }
-  return window.echo.lyrics.previewCandidate(track.id, candidate.id);
+  // Keep the official title / lyricist / composer rows. They all share
+  // timestamp 0, which the host would otherwise merge into translation fields.
+  rows.sort((left, right) => {
+    if (left.timeMs !== right.timeMs) return left.timeMs - right.timeMs;
+    return (isPreviewTitleLine(right.text) ? 1 : 0) - (isPreviewTitleLine(left.text) ? 1 : 0);
+  });
+  return {
+    full: true,
+    lines: rows.map((row) => ({
+      timeMs: row.timeMs,
+      text: row.text,
+      translation: nearestLrcText(translations, row.timeMs) || undefined,
+      romanization: nearestLrcText(romanizations, row.timeMs) || undefined,
+    })),
+  };
+};
+
+const previewLyricsForTrack = async (track, candidate) => {
+  const full = isSnapshotLyricsTrack(track, track?.id)
+    ? await fetchFullCandidatePreview(candidate)
+    : null;
+  if (full?.lines?.length) return full;
+  if (isSnapshotLyricsTrack(track, track?.id)) {
+    const lines = previewFallbackLines(candidate?.previewLines);
+    if (lines.length) return { truncated: true, lines };
+  }
+  const preview = await window.echo.lyrics.previewCandidate(track.id, candidate.id);
+  if (preview?.provider === 'qqmusic' && preview?.syncedText) {
+    const qqPreview = buildQqPreview(preview);
+    if (qqPreview?.lines?.length) return qqPreview;
+  }
+  if (preview?.lines) {
+    const lines = preview.lines
+      .map((line) => ({
+        ...line,
+        text: String(line?.text || '').trim(),
+        translation: cleanSecondaryLine(line?.translation),
+        romanization: cleanSecondaryLine(line?.romanization),
+      }))
+      .filter((line) => line.text);
+    if (lines.length) return { ...preview, lines };
+  }
+  return preview;
 };
 
 // The host's manual search turns the whole query into a title and drops the
@@ -1874,7 +1935,7 @@ const selectMatchCandidate = async (candidate) => {
     if (matchState.selected?.id !== candidate.id) return;
     matchState.preview = preview;
     const lines = Array.isArray(preview?.lines) ? preview.lines : [];
-    candidate._translated = lines.some((line) => Boolean(line.translation));
+    candidate._translated = lines.some((line) => Boolean(cleanSecondaryLine(line.translation)));
     candidate._lineCount = lines.length;
     renderMatchList();
     renderMatchPreview();
@@ -1899,7 +1960,7 @@ const enrichMatchCandidates = async (candidates, trackId) => {
         active += 1;
         window.echo.lyrics.previewCandidate(trackId, candidate.id).then((preview) => {
           const lines = Array.isArray(preview?.lines) ? preview.lines : [];
-          candidate._translated = lines.some((line) => Boolean(line.translation));
+          candidate._translated = lines.some((line) => Boolean(cleanSecondaryLine(line.translation)));
           candidate._lineCount = lines.length;
         }).catch(() => {}).finally(() => {
           active -= 1;
